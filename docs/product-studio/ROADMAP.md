@@ -203,9 +203,19 @@ Phase B 后续仍必须解决的决策：部署级 OS/container 隔离、视觉�
 - 状态：`in progress`（Product-side backend/API 与主持面板已实现；未招募、未收集真实参与者）
 - 已有前置：C2 测量计划和 B6 可运行交付版本；Experience 内核有 `OutcomeObservation`/`EvidenceReview` 基础模型，但未接入 Product C2 的 plan/delivery/consent revision。
 - 决策已冻结：本地同意/最小数据/撤回和保留（PS-O022）；Product-side typed intake 与专用存储边界（PS-O023，PS-O010 对长期跨域仍 open）；具名 reviewer 与 source-layer ceiling（PS-O024）。
-- 当前动作：D1/D2/D3 已按本地首批边界冻结；API/backend/host panel 已实现。2026-09-27 暂缓真实参与者/负责人真实体验验证；主链路恢复 Gate 已通过，且 C1 默认暂停门禁已落地。C1.2 门禁与中断 Execution Job 恢复已通过回归；保持开关关闭，是否通过显式开关启动由负责人决定。负责人仍可作为首位真实参与者，但 N=1 participant 可做多个真实 task session 时必须按 `participant_n=1, session_k>=1` 记录；重复 session 不等于多个用户，不满足当前 C2 计划的 participant `minimum_n=3`，也不支持泛化效果声明。保持 `c1-local-v1` 同意/撤回边界；任何 evidence-level promotion 仍要求与 host 分离的具名 reviewer。
+- 当前动作：D1/D2/D3 已按本地首批边界冻结；API/backend/host panel 已实现。2026-09-27 暂缓真实参与者/负责人真实体验验证；主链路恢复 Gate 已通过，且 C1 默认暂停门禁已落地。C1.2 门禁与中断 Execution Job 恢复、C1.3 trial lifecycle/retention 已通过回归；保持开关关闭，是否通过显式开关启动由负责人决定。负责人仍可作为首位真实参与者，但 N=1 participant 可做多个真实 task session 时必须按 `participant_n=1, session_k>=1` 记录；重复 session 不等于多个用户，不满足当前 C2 计划的 participant `minimum_n=3`，也不支持泛化效果声明。保持 `c1-local-v1` 同意/撤回边界；任何 evidence-level promotion 仍要求与 host 分离的具名 reviewer。
 - 已冻结/已实现范围：人工主持、随机 participant ID、显式逐次同意、Product-side 手动 C1 observation intake；每条记录 pin C2 MeasurementPlan revision + measure + B6 bundle/execution revision + consent receipt；无自动运行事件采集；具名人工 EvidenceReview 受 source ceiling 门控；撤回按批准政策擦除/排除相关数据。
 - 退出门槛：至少一轮符合已确认 C2 样本计划的可复核任务试用完成；每条观察可追上述 pin；未同意/撤回/缺失/技术失败均有拒绝或非成功路径测试；参与者使用的同意文案和数据处理方式已清楚展示；EvidenceReview 由具名且与 host 分离的人工完成。负责人 N=1 自试可以作为启动性真实观察，但不单独满足 minimum_n=3 的退出门槛。
+
+### C1.3 — trial lifecycle and retention enforcement
+
+- 状态：`done`
+- 范围：C1 envelope close/stop API、Panel 结束 trial、关闭后禁止新的 enrollment/presentation/observation、SQLite/restart/withdrawal/retention 回归。
+- 实现：active envelope 可通过 `/close` 或 `/stop` 结束并记录 `closed_at`、`close_reason` 和 `retention_expires_at`；服务端继续以 active gate 拒绝关闭后的 presentation/observation；Panel 要求结束原因并显示 30 天 retention 到期信息。
+- retention：本地 C1 service 初始化以及 envelope list/get 前执行 cleanup；到期后删除 receipt、participant、presentation、observation 和 review 源记录，保留 envelope 生命周期状态与 content-free audit。无常驻 worker，不声明外部备份擦除。
+- 边界：本批不启动真实参与者，不改变 C2 `minimum_n=3`，不提升 Outcome Evidence；关闭后允许整理已存在 observation 的人工 review，withdrawal tombstone 继续按 content-free 语义保留。
+- 验证：C1 API 7 passed（含 close/stop、关闭后写入拒绝、SQLite restart 与 30 天 cleanup）；前端 29 passed；完整回归结果见 C1.3 iteration。
+- 详细记录：[`iterations/2026-09-27-c1-trial-lifecycle-and-retention.md`](iterations/2026-09-27-c1-trial-lifecycle-and-retention.md)
 
 ### C1.2 — C1 暂停门禁、独立审查与中断 Job 恢复
 

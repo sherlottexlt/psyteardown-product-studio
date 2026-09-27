@@ -11,7 +11,8 @@ import hashlib
 import sqlite3
 from collections import defaultdict
 from collections.abc import Callable, Iterable
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal, Protocol, TypeAlias
 from uuid import uuid4
@@ -51,6 +52,8 @@ C1_DATA_CATEGORIES: tuple[str, ...] = (
     "task_completion_status",
     "manual_observation_timestamp",
 )
+C1_RETENTION_DAYS = 30
+C1_RETENTION_PERIOD = timedelta(days=C1_RETENTION_DAYS)
 C1_RETENTION_POLICY = (
     "Source records are retained locally for at most 30 days after envelope close; "
     "no anonymous aggregate is retained in C1."
@@ -83,6 +86,9 @@ class C1TrialEnvelope(FrozenModel):
     meta: RevisionMeta
     project_id: Identifier
     status: Literal["active", "closed", "stopped"] = "active"
+    closed_at: datetime | None = None
+    retention_expires_at: datetime | None = None
+    close_reason: Identifier | None = None
     measurement_plan_revision_id: Identifier
     delivery_bundle_id: Identifier
     delivery_bundle_revision_id: Identifier
@@ -104,7 +110,34 @@ class C1TrialEnvelope(FrozenModel):
             raise ValueError("unsupported C1 consent policy revision")
         if self.access_policy != C1_ACCESS_POLICY:
             raise ValueError("C1 access policy cannot be widened by intake data")
+        if self.status == "active" and (self.closed_at is not None or self.retention_expires_at is not None):
+            raise ValueError("active C1 trial envelopes cannot have close timestamps")
+        if self.status != "active":
+            if self.closed_at is None or self.retention_expires_at is None:
+                raise ValueError("closed C1 trial envelopes require retention timestamps")
+            if self.retention_expires_at != self.closed_at + C1_RETENTION_PERIOD:
+                raise ValueError("C1 retention expiry must be 30 days after envelope close")
         return self
+
+
+@dataclass(frozen=True)
+class C1RetentionCleanupResult:
+    envelope_ids: tuple[str, ...] = ()
+    deleted_receipts: int = 0
+    deleted_participants: int = 0
+    deleted_presentations: int = 0
+    deleted_observations: int = 0
+    deleted_reviews: int = 0
+
+    @property
+    def deleted_source_records(self) -> int:
+        return (
+            self.deleted_receipts
+            + self.deleted_participants
+            + self.deleted_presentations
+            + self.deleted_observations
+            + self.deleted_reviews
+        )
 
 
 class C1ConsentReceipt(FrozenModel):
@@ -313,6 +346,19 @@ class C1Repository(Protocol):
 
     def list_tombstones(self, *, project_id: str | None = None) -> list[C1WithdrawalTombstone]: ...
 
+    def transition_c1_envelope(
+        self,
+        *,
+        project_id: str,
+        envelope_id: str,
+        status: Literal["closed", "stopped"],
+        closed_at: datetime,
+        close_reason: str,
+        actor: str,
+    ) -> C1TrialEnvelope: ...
+
+    def cleanup_c1_retention(self, *, now: datetime) -> C1RetentionCleanupResult: ...
+
     def close(self) -> None: ...
 
 
@@ -401,6 +447,65 @@ class InMemoryC1Repository:
         if project_id is not None:
             values = [value for value in values if value.project_id == project_id]
         return sorted(values, key=lambda value: (value.withdrawn_at, value.tombstone_id))
+
+    def transition_c1_envelope(
+        self,
+        *,
+        project_id: str,
+        envelope_id: str,
+        status: Literal["closed", "stopped"],
+        closed_at: datetime,
+        close_reason: str,
+        actor: str,
+    ) -> C1TrialEnvelope:
+        current = self.get_c1_current("c1_trial_envelope", envelope_id)
+        if not isinstance(current, C1TrialEnvelope) or current.project_id != project_id:
+            raise DomainStateError(f"unknown C1 trial envelope: {envelope_id}")
+        if current.status != "active":
+            raise DomainStateError("C1 trial envelope is already closed")
+        updated = C1TrialEnvelope.model_validate({
+            **current.model_dump(mode="python"),
+            "status": status,
+            "closed_at": closed_at,
+            "retention_expires_at": closed_at + C1_RETENTION_PERIOD,
+            "close_reason": close_reason,
+        })
+        self._objects["c1_trial_envelope"][updated.revision_id] = updated
+        self._current[("c1_trial_envelope", envelope_id)] = updated.revision_id
+        return updated
+
+    def cleanup_c1_retention(self, *, now: datetime) -> C1RetentionCleanupResult:
+        expired = [
+            item for item in self.list_c1("c1_trial_envelope")
+            if isinstance(item, C1TrialEnvelope)
+            and item.status != "active"
+            and item.retention_expires_at is not None
+            and item.retention_expires_at <= now
+        ]
+        counts = defaultdict(int)
+        for envelope in expired:
+            for object_type in (
+                "c1_consent_receipt",
+                "c1_participant",
+                "c1_task_presentation",
+                "c1_outcome_observation",
+                "c1_evidence_review",
+            ):
+                for value in list(self.list_c1(object_type, project_id=envelope.project_id)):
+                    if getattr(value, "envelope_id", None) != envelope.envelope_id:
+                        continue
+                    _, object_id = _c1_identity(value)
+                    self._objects[object_type].pop(value.revision_id, None)
+                    self._current.pop((object_type, object_id), None)
+                    counts[object_type] += 1
+        return C1RetentionCleanupResult(
+            envelope_ids=tuple(item.envelope_id for item in expired),
+            deleted_receipts=counts["c1_consent_receipt"],
+            deleted_participants=counts["c1_participant"],
+            deleted_presentations=counts["c1_task_presentation"],
+            deleted_observations=counts["c1_outcome_observation"],
+            deleted_reviews=counts["c1_evidence_review"],
+        )
 
     def close(self) -> None:
         return None
@@ -617,6 +722,109 @@ class SQLiteC1Repository:
         query += " ORDER BY rowid"
         return [C1WithdrawalTombstone.model_validate_json(row[0]) for row in self._conn.execute(query, params)]
 
+    def transition_c1_envelope(
+        self,
+        *,
+        project_id: str,
+        envelope_id: str,
+        status: Literal["closed", "stopped"],
+        closed_at: datetime,
+        close_reason: str,
+        actor: str,
+    ) -> C1TrialEnvelope:
+        try:
+            self._conn.execute("BEGIN IMMEDIATE")
+            row = self._conn.execute(
+                "SELECT object_json FROM c1_records WHERE object_type=? AND object_id=? AND project_id=?",
+                ("c1_trial_envelope", envelope_id, project_id),
+            ).fetchone()
+            current = C1TrialEnvelope.model_validate_json(row[0]) if row else None
+            if current is None:
+                raise DomainStateError(f"unknown C1 trial envelope: {envelope_id}")
+            if current.status != "active":
+                raise DomainStateError("C1 trial envelope is already closed")
+            updated = C1TrialEnvelope.model_validate({
+                **current.model_dump(mode="python"),
+                "status": status,
+                "closed_at": closed_at,
+                "retention_expires_at": closed_at + C1_RETENTION_PERIOD,
+                "close_reason": close_reason,
+            })
+            self._conn.execute(
+                "UPDATE c1_records SET object_json=? WHERE object_type=? AND object_id=?",
+                (updated.model_dump_json(), "c1_trial_envelope", envelope_id),
+            )
+            self._conn.execute(
+                "INSERT INTO c1_audit_events VALUES(?,?,?,?,?,?,?)",
+                (
+                    f"audit:{envelope_id}:{status}",
+                    f"envelope_{status}",
+                    project_id,
+                    envelope_id,
+                    actor,
+                    closed_at.isoformat(),
+                    __import__("json").dumps({"status": status, "retention_expires_at": updated.retention_expires_at.isoformat()}, sort_keys=True),
+                ),
+            )
+            self._conn.commit()
+            return updated
+        except Exception:
+            self._conn.rollback()
+            raise
+
+    def cleanup_c1_retention(self, *, now: datetime) -> C1RetentionCleanupResult:
+        envelopes = [
+            item for item in self.list_c1("c1_trial_envelope")
+            if isinstance(item, C1TrialEnvelope)
+            and item.status != "active"
+            and item.retention_expires_at is not None
+            and item.retention_expires_at <= now
+        ]
+        counts = defaultdict(int)
+        try:
+            self._conn.execute("BEGIN IMMEDIATE")
+            for envelope in envelopes:
+                rows = self._conn.execute(
+                    "SELECT object_type,object_id,revision_id FROM c1_records WHERE project_id=? AND envelope_id=? AND object_type<>?",
+                    (envelope.project_id, envelope.envelope_id, "c1_trial_envelope"),
+                ).fetchall()
+                if not rows:
+                    continue
+                self._conn.executemany(
+                    "DELETE FROM c1_records WHERE object_type=? AND object_id=?",
+                    tuple((kind, object_id) for kind, object_id, _ in rows),
+                )
+                self._conn.executemany(
+                    "DELETE FROM c1_audit_events WHERE audit_id=?",
+                    tuple((f"audit:{revision_id}",) for _, _, revision_id in rows),
+                )
+                for kind, _, _ in rows:
+                    counts[kind] += 1
+                self._conn.execute(
+                    "INSERT OR IGNORE INTO c1_audit_events VALUES(?,?,?,?,?,?,?)",
+                    (
+                        f"retention:{envelope.envelope_id}",
+                        "c1_retention_cleanup",
+                        envelope.project_id,
+                        envelope.envelope_id,
+                        "local-retention",
+                        now.isoformat(),
+                        __import__("json").dumps({"deleted_source_records": len(rows)}, sort_keys=True),
+                    ),
+                )
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
+        return C1RetentionCleanupResult(
+            envelope_ids=tuple(item.envelope_id for item in envelopes),
+            deleted_receipts=counts["c1_consent_receipt"],
+            deleted_participants=counts["c1_participant"],
+            deleted_presentations=counts["c1_task_presentation"],
+            deleted_observations=counts["c1_outcome_observation"],
+            deleted_reviews=counts["c1_evidence_review"],
+        )
+
 
 def _c1_meta(service, actor: str, reason: str) -> RevisionMeta:
     return RevisionMeta(revision=1, created_at=service._now(), created_by=actor, reason=reason)
@@ -635,6 +843,7 @@ class ProductC1ObservationService:
         self.trial_enabled = trial_enabled
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._id_factory = id_factory or (lambda prefix: f"{prefix}-{uuid4().hex}")
+        self.cleanup_retention()
 
     def _now(self) -> datetime:
         value = self._clock()
@@ -678,11 +887,50 @@ class ProductC1ObservationService:
         self.repository.save_c1_batch((envelope,))
         return envelope
 
+    def cleanup_retention(self) -> C1RetentionCleanupResult:
+        """Delete expired C1 source records in the local store.
+
+        Cleanup is run on service construction and before envelope reads. This is
+        deliberately local and deterministic; it is not a hosted retention worker.
+        """
+        return self.repository.cleanup_c1_retention(now=self._now())
+
+    def _transition_envelope(
+        self,
+        *,
+        project_id: str,
+        envelope_id: str,
+        status: Literal["closed", "stopped"],
+        actor: str,
+        reason: str,
+    ) -> C1TrialEnvelope:
+        envelope = self.get_envelope(project_id, envelope_id, active=True)
+        if not is_named_human_actor(actor):
+            raise DomainStateError("C1 envelope close/stop requires a named human host")
+        if not reason.strip():
+            raise DomainStateError("C1 envelope close/stop requires a reason")
+        return self.repository.transition_c1_envelope(
+            project_id=project_id,
+            envelope_id=envelope.envelope_id,
+            status=status,
+            closed_at=self._now(),
+            close_reason=reason,
+            actor=actor,
+        )
+
+    def close_envelope(self, *, project_id: str, envelope_id: str, actor: str, reason: str) -> C1TrialEnvelope:
+        return self._transition_envelope(project_id=project_id, envelope_id=envelope_id, status="closed", actor=actor, reason=reason)
+
+    def stop_envelope(self, *, project_id: str, envelope_id: str, actor: str, reason: str) -> C1TrialEnvelope:
+        return self._transition_envelope(project_id=project_id, envelope_id=envelope_id, status="stopped", actor=actor, reason=reason)
+
     def list_envelopes(self, project_id: str) -> tuple[C1TrialEnvelope, ...]:
+        self.cleanup_retention()
         self.application.get_project_view(project_id)
         return tuple(item for item in self.repository.list_c1("c1_trial_envelope", project_id=project_id) if isinstance(item, C1TrialEnvelope))
 
     def get_envelope(self, project_id: str, envelope_id: str, *, active: bool = False) -> C1TrialEnvelope:
+        self.cleanup_retention()
         value = self.repository.get_c1_current("c1_trial_envelope", envelope_id)
         if not isinstance(value, C1TrialEnvelope) or value.project_id != project_id:
             raise DomainStateError(f"unknown C1 trial envelope: {envelope_id}")
@@ -920,9 +1168,9 @@ def _validate_delivery_pin(bundle: ProductDeliveryBundle, execution_revision_id:
 
 __all__ = [
     "C1_ACCESS_POLICY", "C1_CONSENT_POLICY_REVISION", "C1_CONSENT_STATEMENT",
-    "C1_DATA_CATEGORIES", "C1_EVIDENCE_CEILING", "C1_RETENTION_POLICY",
+    "C1_DATA_CATEGORIES", "C1_EVIDENCE_CEILING", "C1_RETENTION_DAYS", "C1_RETENTION_PERIOD", "C1_RETENTION_POLICY",
     "C1_SOURCE_LAYER", "C1_WITHDRAWAL_POLICY", "C1ConsentReceipt",
-    "C1EvidenceReview", "C1OutcomeObservation", "C1Participant", "C1Repository",
+    "C1EvidenceReview", "C1RetentionCleanupResult", "C1OutcomeObservation", "C1Participant", "C1Repository",
     "C1TaskPresentation", "C1TrialEnvelope", "C1WithdrawalTombstone",
     "InMemoryC1Repository", "SQLiteC1Repository", "ProductC1ObservationService",
 ]

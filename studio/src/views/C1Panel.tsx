@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   enrollC1Participant,
+  endC1Envelope,
   getC1Policy,
   listC1Envelopes,
   listC1Observations,
@@ -90,6 +91,7 @@ export function C1Panel({
   const [reviewLevel, setReviewLevel] = useState<C1EvidenceLevel>("observed");
   const [reviewRationale, setReviewRationale] = useState("Reviewed the structured task record");
   const [consentChecked, setConsentChecked] = useState(false);
+  const [endReason, setEndReason] = useState("");
 
   const policy = policyQuery.data;
   const participants = participantsQuery.data ?? [];
@@ -128,6 +130,7 @@ export function C1Panel({
 
   const canStart = plan.status === "confirmed" && deliveryBundle?.contract_is_current && executionJob?.status === "succeeded" && Boolean(contract) && policy?.trial_state === "available";
   const completionCauseRequired = status !== "observed" && !completionCause.trim();
+  const envelopeActive = envelope?.status === "active";
   return (
     <section className="panel evidence-section evidence-section--wide c1-panel" aria-labelledby="c1-panel-title">
       <div className="panel__heading">
@@ -141,6 +144,11 @@ export function C1Panel({
         <div className="c1-actions">
           <button className="button button--primary" disabled={busy || !canStart} onClick={() => deliveryBundle && executionJob && void run(() => startC1Envelope({ projectId, measurementPlanRevisionId: plan.revision_id, deliveryBundleId: deliveryBundle.bundle_id, executionJobRevisionId: deliveryBundle.execution_job_revision_id, webGenerationContractRevisionId: deliveryBundle.web_generation_contract_revision_id }))}>开始本地 C1 试用</button>
           {!canStart ? <span className="unknown-copy">{policy?.trial_state === "paused" ? policy.trial_status_message : "需要确认的 C2 计划、当前 Web 契约和成功的 B6 交付包。"}</span> : null}
+        </div>
+      ) : !envelopeActive ? (
+        <div className="c1-stack">
+          <p className="c1-muted">该 trial 已{envelope?.status === "closed" ? "结束" : "停止"}；关闭后不再允许 enrollment、presentation 或 observation。源记录将在关闭后 30 天到期清理。</p>
+          {envelope?.closed_at ? <small>关闭时间：{envelope.closed_at} · retention 到期：{envelope.retention_expires_at}</small> : null}
         </div>
       ) : (
         <div className="c1-stack">
@@ -182,6 +190,13 @@ export function C1Panel({
           </div>
           {observations.length ? <div className="c1-observations"><h3>当前未撤回观察</h3>{observations.map((item) => { const review = reviewByObservationId.get(item.observation_id); return <div key={item.observation_id}><Badge tone={item.status === "observed" ? "good" : "warn"}>{item.status}</Badge><span>{item.measure_id} · {String(item.value ?? "—")}</span><small>{review ? `review: ${review.decision}/${review.evidence_level_after}` : "待人工 review"} · {item.recorded_at}</small></div>; })}</div> : null}
           {currentParticipant ? <button className="button button--quiet c1-withdraw" disabled={busy} onClick={() => void run(async () => { await withdrawC1Participant({ projectId, envelopeId: envelope.envelope_id, participantId: currentParticipant.participant_id }); setParticipantId(""); setPresentationId(""); })}>记录参与者撤回并擦除源记录</button> : null}
+          <div className="c1-end-trial">
+            <label>结束原因<input value={endReason} onChange={(event) => setEndReason(event.target.value)} placeholder="例如：本次本地试用完成" /></label>
+            <div className="c1-actions">
+              <button className="button button--quiet" disabled={busy || !endReason.trim()} onClick={() => void run(async () => { await endC1Envelope({ projectId, envelopeId: envelope.envelope_id, action: "close", reason: endReason.trim() }); setEndReason(""); })}>结束 trial</button>
+              <button className="button button--quiet" disabled={busy || !endReason.trim()} onClick={() => void run(async () => { await endC1Envelope({ projectId, envelopeId: envelope.envelope_id, action: "stop", reason: endReason.trim() }); setEndReason(""); })}>停止 trial</button>
+            </div>
+          </div>
         </div>
       )}
     </section>

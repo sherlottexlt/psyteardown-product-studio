@@ -17,6 +17,7 @@ from psyteardown.api.schemas import (
     C1PolicyResponse,
     C1TaskPresentationResponse,
     C1TrialEnvelopeResponse,
+    EndC1EnvelopeRequest,
     C1WithdrawalTombstoneResponse,
     EnrollC1ParticipantRequest,
     PresentC1TaskRequest,
@@ -85,6 +86,28 @@ async def start_c1_envelope(project_id: str, request: StartC1EnvelopeRequest, se
 )
 async def list_c1_envelopes(project_id: str, service: C1Service) -> list[C1TrialEnvelopeResponse]:
     return [C1TrialEnvelopeResponse.from_domain(item) for item in service.list_envelopes(project_id)]
+
+
+@router.post(
+    "/projects/{project_id}/c1/envelopes/{envelope_id}/close",
+    response_model=C1TrialEnvelopeResponse,
+    responses=ERROR_RESPONSES,
+)
+async def close_c1_envelope(project_id: str, envelope_id: str, request: EndC1EnvelopeRequest, service: C1Service) -> C1TrialEnvelopeResponse:
+    return C1TrialEnvelopeResponse.from_domain(service.close_envelope(
+        project_id=project_id, envelope_id=envelope_id, actor=request.actor, reason=request.reason,
+    ))
+
+
+@router.post(
+    "/projects/{project_id}/c1/envelopes/{envelope_id}/stop",
+    response_model=C1TrialEnvelopeResponse,
+    responses=ERROR_RESPONSES,
+)
+async def stop_c1_envelope(project_id: str, envelope_id: str, request: EndC1EnvelopeRequest, service: C1Service) -> C1TrialEnvelopeResponse:
+    return C1TrialEnvelopeResponse.from_domain(service.stop_envelope(
+        project_id=project_id, envelope_id=envelope_id, actor=request.actor, reason=request.reason,
+    ))
 
 
 @router.get(

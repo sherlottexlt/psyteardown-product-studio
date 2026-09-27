@@ -2,9 +2,9 @@
 
 - 快照日期：2026-09-27
 - 当前阶段：Phase B 已关闭；Phase C in progress（C0/C2/C3 已完成；C1 Product-side backend/API、主持面板和主链路引导已实现，尚未招募/收集真实参与者；B4 诊断边界已记录）
-- 当前工作包：C1 Active，真实参与者/负责人真实体验验证继续暂缓；C1 API/UI 暂停门禁、reviewer 占位拒绝和中断 Execution Job 恢复已落地，主链路恢复 Gate 已通过；当前保持真实试用开关关闭，不设独立的非参与者演练 Gate；C3 R4 已完成 10/10，本批稳定性 Gate 已通过；R1/R2/R3 失败样本与 B4 安全诊断边界仍保留，均不等于生产级稳定性保证
-- 下一步：C1 真实体验验证继续暂缓；C1.2 门禁与恢复回归已通过；下一步不是自动启动试用，而是由负责人明确决定是否通过 `PSYTEARDOWN_C1_TRIAL_ENABLED=1` 按 `c1-local-v1` 启动自我试用；这替代强制的非参与者演练。先把结果按 `participant_n=1, session_k>=1` 标为本地探索性自试：你可以做多次真实任务/多次 presentation，但不能把同一个人计作多个用户，也不能把它当作当前 C2 计划的 `minimum_n=3` participant gate。多次 session 可用于观察重复性、学习效应和疲劳效应；保留显式同意、30 天保留/撤回边界，任何 EvidenceReview 等级提升仍须由与 host 分离的具名 reviewer 完成。
-- 最近完整验证：2026-09-27 体验补强后的确定性回归 `pytest -q --ignore=tests/product/test_c0_real_provider_e2e.py` 558 passed、3 skipped、2 warnings；`npm test -- --run` 28 passed（含 C1Panel）；`npm run build` 成功；Chromium E2E 3 passed（含 Product Contract、Evidence/C2 来源层、阈值、确认、C1 panel 启动 Gate、工作区恢复和 axe Gate）；OpenAPI drift 已重新生成。C0 于 2026-09-25 完成过一次真实 DeepSeek Product Contract → B7m source=model → B4 本地 subprocess/Chromium → B6 交付包链路，5 次模型调用，5,788 input / 7,824 output tokens，总耗时 100.22 秒；2026-09-26 的一次重复尝试在 B7m 静态门禁因模型漏写契约 screen ID 而失败，需由 C3 评估稳定性。 C3 于 2026-09-26 完成 R1/R2/R3 诊断，并完成 R4 有界复测：首轮 10 次中 7 次完整成功；第二轮 10 次中 8 次完整成功，2 次 B4 `command_failed` 未恢复；R3 完成 6 次后安全停止，其中 1 次 `browser_command_failed`、1 次 `run_timeout`；R4 10/10 完整通过，50 次模型调用，57,724 input / 83,183 output tokens。R2 总 52 次模型调用，58,850 input / 86,279 output tokens，总耗时 746.48 秒；R3 总 25 次调用，28,430 input / 41,806 output tokens，记录耗时 725.40 秒。R4 汇总金额保持 unavailable，不作推断。
+- 当前工作包：C1 Active，真实参与者/负责人真实体验验证继续暂缓；C1.3 trial lifecycle、close/stop API、Panel 结束操作、关闭后 presentation/observation 拒绝和本地 30 天 retention cleanup 已落地；C1 API/UI 暂停门禁、reviewer 占位拒绝和中断 Execution Job 恢复已落地，主链路恢复 Gate 已通过；当前保持真实试用开关关闭，不设独立的非参与者演练 Gate；C3 R4 已完成 10/10，本批稳定性 Gate 已通过；R1/R2/R3 失败样本与 B4 安全诊断边界仍保留，均不等于生产级稳定性保证
+- 下一步：C1 真实体验验证继续暂缓；C1.3 lifecycle/retention 回归已通过。下一步不是自动启动试用，而是由负责人明确决定是否通过 `PSYTEARDOWN_C1_TRIAL_ENABLED=1` 按 `c1-local-v1` 启动自我试用；这替代强制的非参与者演练。先把结果按 `participant_n=1, session_k>=1` 标为本地探索性自试：你可以做多次真实任务/多次 presentation，但不能把同一个人计作多个用户，也不能把它当作当前 C2 计划的 `minimum_n=3` participant gate。多次 session 可用于观察重复性、学习效应和疲劳效应；保留显式同意、30 天保留/撤回边界，任何 EvidenceReview 等级提升仍须由与 host 分离的具名 reviewer 完成。
+- 最近完整验证：2026-09-27 C1.3 lifecycle/retention 完成后的确定性回归 `pytest -q --ignore=tests/product/test_c0_real_provider_e2e.py` 561 passed、3 skipped、2 warnings；`npm test -- --run` 29 passed（含 C1Panel 结束 trial）；`npm run build` 成功；Chromium E2E 3 passed（含 Product Contract、Evidence/C2 来源层、阈值、确认、C1 panel 启动 Gate、工作区恢复和 axe Gate）；OpenAPI drift 已重新生成。C0 于 2026-09-25 完成过一次真实 DeepSeek Product Contract → B7m source=model → B4 本地 subprocess/Chromium → B6 交付包链路，5 次模型调用，5,788 input / 7,824 output tokens，总耗时 100.22 秒；2026-09-26 的一次重复尝试在 B7m 静态门禁因模型漏写契约 screen ID 而失败，需由 C3 评估稳定性。 C3 于 2026-09-26 完成 R1/R2/R3 诊断，并完成 R4 有界复测：首轮 10 次中 7 次完整成功；第二轮 10 次中 8 次完整成功，2 次 B4 `command_failed` 未恢复；R3 完成 6 次后安全停止，其中 1 次 `browser_command_failed`、1 次 `run_timeout`；R4 10/10 完整通过，50 次模型调用，57,724 input / 83,183 output tokens。R2 总 52 次模型调用，58,850 input / 86,279 output tokens，总耗时 746.48 秒；R3 总 25 次调用，28,430 input / 41,806 output tokens，记录耗时 725.40 秒。R4 汇总金额保持 unavailable，不作推断。
 
 ## 一句话状态
 
@@ -34,7 +34,7 @@ Phase B 已关闭。仓库已经具备从模糊意图到可运行 Web 产品、�
 | B8 反馈驱动迭代 | 一条 submitted 反馈可驱动同一 Web 契约的下一 proposed revision（ID 不变、只追加引用反馈 ID/类别的验收检查、不复制正文）；撤回使迭代 Job stale；人工确认后重走 B3→B4→B6；交付包 sha256/契约集合差异；反馈处理状态由人标记 | `src/psyteardown/product/{jobs,providers,feedback,delivery}.py`、`tests/api/test_feedback_iteration.py`、`studio/src/views/{PreviewFeedbackPanel,WorkbenchView}.tsx` | verified in local scope；模板路径下产品不变 |
 | C2 Outcome Contract 测量计划 | 从已确认 Outcome Contract 确定性派生带 revision 的测量计划；每条指标有 measure；固定来源层、证据上限、可收集性、阈值、缺失处理、矛盾回退；禁止结果 guardrail、停止条件、样本/同意/撤回边界均可审查；Outcome Contract 修订记录 stale impact | `src/psyteardown/product/{models,measurement,service}.py`、`tests/product/test_measurement.py`、`tests/api/test_http_contract_matrix.py`、`studio/src/views/EvidenceView.tsx`、C2 iteration | verified in local scope；没有 MeasurementObservation/EvidenceReview |
 | 浏览器 Product Contract 闭环 | 从一句话到 intent/problem/outcome 三次 proposal、纠正与具名确认，全程显示 revision、状态与 Job 来源 | `studio/e2e/product-studio.spec.ts`、`studio/src/views/ContractView.tsx` | verified with fake provider；真实 provider 已在脚本链路验证 |
-| 回归基线 | Python、前端单测、类型/生产构建、Chromium E2E/axe 和 OpenAPI drift 通过 | 2026-09-27：556 passed、3 skipped、2 warnings（不含可选 C0 真实 provider 重复测试；含 C3 B4 诊断 Gate）；R4 真实复测 10/10 完整通过；前端 28 passed；Chromium E2E 3 passed；`npm run build` 成功；已重新生成 OpenAPI drift 基线 | verified in covered scope |
+| 回归基线 | Python、前端单测、类型/生产构建、Chromium E2E/axe 和 OpenAPI drift 通过 | 2026-09-27：561 passed、3 skipped、2 warnings（不含可选 C0 真实 provider 重复测试；含 C3 B4 诊断 Gate）；R4 真实复测 10/10 完整通过；前端 29 passed；Chromium E2E 3 passed；`npm run build` 成功；已重新生成 OpenAPI drift 基线 | verified in covered scope |
 
 ## Product Studio 能力差距
 
@@ -50,7 +50,7 @@ Phase B 已关闭。仓库已经具备从模糊意图到可运行 Web 产品、�
 | 浏览器验证 | Playwright 覆盖启动、关键任务、错误态和基础可访问性 | 生成模板测试覆盖启动、Continue、Stop/error、critical/serious axe 与截图产物；B5 可对已知浏览器/axe 失败做确定性白名单修复 | 截图尚非视觉基线回归；仍无跨浏览器/移动/真实用户结果 |
 | 预览与反馈 | 用户直接使用产品，反馈锚定页面、任务和 revision，并驱动可审查迭代 | B7 预览/显式反馈 + B8 迭代提案、版本差异与人工处理状态 verified；模板不消费验收检查，迭代后源码/构建不变 | B9：让迭代改变产品（模板消费检查或 B7m 模型路径） |
 | 导出与交付 | 导出源码、构建物、验证结果、未知和交付说明 | B6 本地交付包 verified（含一次真实链路）；未签名、无部署 | 签名/发布渠道按真实交付需求再定 |
-| 真实结果验证 | 现实任务、用户报告和测量保持来源与证据边界 | C2 测量计划、C1 observation/review intake backend/API/host panel verified；没有真实参与者数据；C3 R4 评估 Gate 已通过 | C1 负责人本地自试；后续是否扩大样本由结果和需求决定；部署级/跨环境稳定性 |
+| 真实结果验证 | 现实任务、用户报告和测量保持来源与证据边界 | C2 测量计划、C1 observation/review intake、trial lifecycle/retention backend/API/host panel verified；没有真实参与者数据；C3 R4 评估 Gate 已通过 | C1 负责人本地自试；后续是否扩大样本由结果和需求决定；部署级/跨环境稳定性 |
 
 `partial foundation` 只表示旧内核存在可复用构件，不表示 Product Studio 已经提供该用户能力。
 
@@ -81,6 +81,7 @@ Phase B 已关闭。仓库已经具备从模糊意图到可运行 Web 产品、�
 13. C1 真实试用默认由 `PSYTEARDOWN_C1_TRIAL_ENABLED=0` 暂停；只有明确开启后才允许创建 trial envelope。暂停是工作流门禁，不是身份、权限或多租户治理。
 14. reviewer 具名校验只拒绝明显自动化主体和常见占位名；它不是现实身份认证。
 15. Job 控制仍是本地客户端动作：暂停/取消/重试先改变持久化状态；若另一个同步请求已经进入子进程，不能承诺即时杀掉该进程，需依赖下一次恢复/刷新确认最终状态。
+16. C1 close/stop 后源记录保留至 envelope close 后 30 天；cleanup 在本地 C1 service 初始化以及 envelope list/get 前触发，不是常驻 worker，也不声称擦除 SQLite 备份、操作系统残留或外部副本。
 
 ## 下一次状态更新的触发条件
 

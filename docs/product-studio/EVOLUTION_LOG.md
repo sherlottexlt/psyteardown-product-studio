@@ -335,3 +335,12 @@
 - reviewer 不再使用 `named-reviewer` 默认占位；服务端拒绝常见占位名，并继续要求 reviewer 与 host 分离。
 - `running` Execution Job 增加显式 orphan recovery；恢复要求调用方确认旧进程已中断风险，再回到 queued。
 - 本批仍不产生 C1 参与者数据或现实结果证据。
+
+
+## 2026-09-27 — C1.3 trial lifecycle and retention enforcement
+
+- C1 envelope 新增 close/stop 生命周期：主持人可通过 API 或 Panel 以具名 actor 和明确原因结束/停止 trial；记录 `closed_at`、`close_reason` 和关闭后 30 天的 `retention_expires_at`。
+- 关闭/停止后，服务端 active gate 拒绝新的 enrollment、presentation 和 observation；Panel 显示结束状态与 retention 到期时间。已存在 observation 的人工 review 仍可在结束后整理，不把 review 误当作新的 presentation/observation。
+- InMemory/SQLite C1 repository 增加确定性 retention cleanup；本地 service 初始化及 envelope list/get 前触发，删除到期源记录并保留 envelope 生命周期状态与 content-free audit；不声称有后台 worker 或跨备份擦除。
+- 新增 SQLite/restart/withdrawal/retention 与 close/stop API 回归，以及 C1 Panel 结束原因测试；本批不启动真实参与者，不改变 C2 `minimum_n=3`，不提升 Outcome Evidence。
+- 详细记录：[`C1.3 trial lifecycle and retention enforcement`](iterations/2026-09-27-c1-trial-lifecycle-and-retention.md)

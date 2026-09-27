@@ -108,6 +108,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/c1/envelopes/{envelope_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close C1 Envelope */
+        post: operations["close_c1_envelope_api_v1_projects__project_id__c1_envelopes__envelope_id__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/c1/envelopes/{envelope_id}/observations": {
         parameters: {
             query?: never;
@@ -173,6 +190,23 @@ export interface paths {
         put?: never;
         /** Review C1 Evidence */
         post: operations["review_c1_evidence_api_v1_projects__project_id__c1_envelopes__envelope_id__reviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/c1/envelopes/{envelope_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop C1 Envelope */
+        post: operations["stop_c1_envelope_api_v1_projects__project_id__c1_envelopes__envelope_id__stop_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1279,6 +1313,10 @@ export interface components {
         C1TrialEnvelopeResponse: {
             /** Access Policy */
             access_policy: string[];
+            /** Close Reason */
+            close_reason: string | null;
+            /** Closed At */
+            closed_at: string | null;
             /** Consent Policy Revision */
             consent_policy_revision: string;
             /** Consent Statement */
@@ -1300,6 +1338,8 @@ export interface components {
             meta: components["schemas"]["RevisionMetaResponse"];
             /** Project Id */
             project_id: string;
+            /** Retention Expires At */
+            retention_expires_at: string | null;
             /** Retention Policy */
             retention_policy: string;
             /** Revision Id */
@@ -1605,6 +1645,13 @@ export interface components {
             expected_revision?: number | null;
             /** Measurement Plan Id */
             measurement_plan_id?: string | null;
+            /** Reason */
+            reason: string;
+        };
+        /** EndC1EnvelopeRequest */
+        EndC1EnvelopeRequest: {
+            /** Actor */
+            actor: string;
             /** Reason */
             reason: string;
         };
@@ -3937,6 +3984,60 @@ export interface operations {
             };
         };
     };
+    close_c1_envelope_api_v1_projects__project_id__c1_envelopes__envelope_id__close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                envelope_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndC1EnvelopeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["C1TrialEnvelopeResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Revision or domain-state conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Request or domain validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     list_c1_observations_api_v1_projects__project_id__c1_envelopes__envelope_id__observations_get: {
         parameters: {
             query?: never;
@@ -4272,6 +4373,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["C1EvidenceReviewResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Revision or domain-state conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Request or domain validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    stop_c1_envelope_api_v1_projects__project_id__c1_envelopes__envelope_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                envelope_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndC1EnvelopeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["C1TrialEnvelopeResponse"];
                 };
             };
             /** @description Resource not found */

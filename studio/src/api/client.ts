@@ -774,6 +774,18 @@ export function startC1Envelope(input: {
   });
 }
 
+export function endC1Envelope(input: {
+  projectId: string;
+  envelopeId: string;
+  action: "close" | "stop";
+  reason: string;
+}): Promise<import("./types").C1TrialEnvelope> {
+  return request(`/api/v1/projects/${encodeURIComponent(input.projectId)}/c1/envelopes/${encodeURIComponent(input.envelopeId)}/${input.action}`, {
+    method: "POST",
+    body: JSON.stringify({ actor: "local-host", reason: input.reason }),
+  });
+}
+
 export function enrollC1Participant(input: {
   projectId: string;
   envelopeId: string;

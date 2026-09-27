@@ -154,6 +154,11 @@ class EnrollC1ParticipantRequest(TransportModel):
     reason: str = Field(min_length=1)
 
 
+class EndC1EnvelopeRequest(TransportModel):
+    actor: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+
+
 class PresentC1TaskRequest(TransportModel):
     participant_id: str = Field(min_length=1)
     task_id: str = Field(min_length=1)
@@ -368,6 +373,9 @@ class C1TrialEnvelopeResponse(TransportModel):
     project_id: str
     meta: RevisionMetaResponse
     status: Literal["active", "closed", "stopped"]
+    closed_at: datetime | None
+    retention_expires_at: datetime | None
+    close_reason: str | None
     measurement_plan_revision_id: str
     delivery_bundle_id: str
     delivery_bundle_revision_id: str

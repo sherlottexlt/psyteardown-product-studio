@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  endC1Envelope,
   getC1Policy,
   listC1Envelopes,
   listC1Observations,
@@ -15,6 +16,7 @@ import {
 import { C1Panel } from "./C1Panel";
 
 vi.mock("../api/client", () => ({
+  endC1Envelope: vi.fn(),
   enrollC1Participant: vi.fn(),
   getC1Policy: vi.fn(),
   listC1Envelopes: vi.fn(),
@@ -140,7 +142,7 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof C1Panel>> = 
 }
 
 describe("C1Panel", () => {
-  afterEach(() => vi.clearAllMocks());
+  afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
   it("keeps envelope creation disabled until a current delivery is available", async () => {
     vi.mocked(getC1Policy).mockResolvedValue(policy as any);
@@ -154,6 +156,22 @@ describe("C1Panel", () => {
     expect(await screen.findByText("需要确认的 C2 计划、当前 Web 契约和成功的 B6 交付包。")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始本地 C1 试用" })).toBeDisabled();
     expect(await screen.findByText(policy.statement)).toBeInTheDocument();
+  });
+
+
+  it("ends an active trial with an explicit reason", async () => {
+    vi.mocked(getC1Policy).mockResolvedValue(policy as any);
+    vi.mocked(listC1Envelopes).mockResolvedValue([envelope] as any);
+    vi.mocked(listC1Participants).mockResolvedValue([]);
+    vi.mocked(listC1Observations).mockResolvedValue([]);
+    vi.mocked(listC1Reviews).mockResolvedValue([]);
+    vi.mocked(endC1Envelope).mockResolvedValue({ ...envelope, status: "closed", closed_at: "2026-09-27T00:00:00Z", retention_expires_at: "2026-10-27T00:00:00Z" } as any);
+
+    const user = userEvent.setup();
+    renderPanel();
+    await user.type(await screen.findByLabelText("结束原因"), "本次本地试用完成");
+    await user.click(screen.getByRole("button", { name: "结束 trial" }));
+    await waitFor(() => expect(endC1Envelope).toHaveBeenCalledWith({ projectId: "project-1", envelopeId: "envelope-1", action: "close", reason: "本次本地试用完成" }));
   });
 
   it("records non-success paths without a value and reviews one observation at a time", async () => {

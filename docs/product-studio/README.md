@@ -57,6 +57,7 @@
 | [`iterations/2026-09-26-c1-self-pilot-scope-correction.md`](iterations/2026-09-26-c1-self-pilot-scope-correction.md) | C1 负责人自试与非参与者演练 Gate 范围校正 | 已关闭；负责人自试可直接启动，N=1 证据边界不变 |
 | [`iterations/2026-09-27-product-studio-recovery-and-local-guardrails.md`](iterations/2026-09-27-product-studio-recovery-and-local-guardrails.md) | C1 真实体验验证前的工作区恢复、Job 控制与本地边界补强 | 已关闭；真实参与者验证暂缓 |
 | [`iterations/2026-09-27-c1-trial-pause-and-orphan-recovery.md`](iterations/2026-09-27-c1-trial-pause-and-orphan-recovery.md) | C1 暂停门禁、独立审查与中断 Job 恢复 | 已关闭；真实参与者验证继续暂缓 |
+| [`iterations/2026-09-27-c1-trial-lifecycle-and-retention.md`](iterations/2026-09-27-c1-trial-lifecycle-and-retention.md) | C1.3 trial lifecycle、close/stop 与本地 30 天 retention enforcement | 已关闭；真实参与者验证继续暂缓 |
 
 后续按需要增加以下内容，而不是预先建立大量空目录：
 
@@ -67,7 +68,7 @@
 
 ## 当前优先级校正
 
-2026-09-27 起，C1 真实参与者/负责人真实体验验证暂缓。暂停现在同时由 API/UI 门禁执行；先处理会直接中断本地使用的约束：项目恢复、未完成 Job 的继续/暂停/取消、原始输入上限和本地预览端口冲突。主链路恢复 Gate 与 C1.2 门禁回归均已通过；保持 C1 开关关闭，是否解除由负责人明确决定。
+2026-09-27 起，C1 真实参与者/负责人真实体验验证暂缓。暂停现在同时由 API/UI 门禁执行；先处理会直接中断本地使用的约束：项目恢复、未完成 Job 的继续/暂停/取消、原始输入上限和本地预览端口冲突。主链路恢复 Gate、C1.2 门禁回归和 C1.3 lifecycle/retention 回归均已通过；保持 C1 开关关闭，是否解除由负责人明确决定。
 
 ## 工作包记录的统一口径
 
