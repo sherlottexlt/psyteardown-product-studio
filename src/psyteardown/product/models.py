@@ -68,6 +68,9 @@ class HumanConfirmation(FrozenModel):
     rationale: Identifier
 
 
+PRODUCT_INTENT_MAX_INPUT_CHARS = 4000
+
+
 class ProductProject(FrozenModel):
     """Minimal project lifecycle aggregate; child objects remain independent."""
 
@@ -565,6 +568,8 @@ class WebProductGenerationContract(FrozenModel):
     app_title: Identifier
     screens: tuple[WebScreenSpec, ...] = Field(min_length=1, max_length=5)
     tasks: tuple[WebTaskSpec, ...] = Field(min_length=1, max_length=8)
+    # Ordered happy-path task IDs for the one journey the human should run.
+    primary_flow_task_ids: tuple[Identifier, ...] = Field(default_factory=tuple, max_length=8)
     states: tuple[WebStateSpec, ...] = Field(min_length=5, max_length=20)
     content_slots: tuple[WebContentSlot, ...] = Field(min_length=1, max_length=20)
     acceptance_checks: tuple[WebAcceptanceCheck, ...] = Field(min_length=1, max_length=20)
@@ -596,12 +601,14 @@ class WebProductGenerationContract(FrozenModel):
             raise ValueError("Web output layout is fixed for the first slice")
         screen_ids = tuple(item.screen_id for item in self.screens)
         task_ids = tuple(item.task_id for item in self.tasks)
+        primary_flow_ids = tuple(self.primary_flow_task_ids)
         state_ids = tuple(item.state_id for item in self.states)
         slot_ids = tuple(item.slot_id for item in self.content_slots)
         check_ids = tuple(item.check_id for item in self.acceptance_checks)
         for label, values in (
             ("screen", screen_ids),
             ("task", task_ids),
+            ("primary flow task", primary_flow_ids),
             ("state", state_ids),
             ("content slot", slot_ids),
             ("acceptance check", check_ids),
@@ -611,6 +618,8 @@ class WebProductGenerationContract(FrozenModel):
                 raise ValueError(f"duplicate Web {label} IDs: {sorted(duplicates)}")
         screen_set = set(screen_ids)
         task_set = set(task_ids)
+        if not set(primary_flow_ids) <= task_set:
+            raise ValueError("primary flow references an unknown task")
         state_set = set(state_ids)
         for task in self.tasks:
             if task.screen_id not in screen_set:
@@ -899,7 +908,7 @@ class ProductProposalJob(FrozenModel):
     result_object_id: Identifier
     result_object_ids: tuple[Identifier, ...] = ()
     result_expected_revision: int | None = Field(default=None, ge=1)
-    raw_input: str | None = None
+    raw_input: str | None = Field(default=None, max_length=PRODUCT_INTENT_MAX_INPUT_CHARS)
     feedback_id: Identifier | None = None
     fingerprint: Identifier
     attempt: int = Field(default=0, ge=0)

@@ -179,6 +179,8 @@ class WebProductGenerationContractProposal(BoundaryModel):
     app_title: Identifier
     screens: list[WebScreenSpec] = Field(min_length=1)
     tasks: list[WebTaskSpec] = Field(min_length=1)
+    # Ordered happy-path task IDs for the first end-to-end user journey.
+    primary_flow_task_ids: list[Identifier] = Field(default_factory=list, max_length=8)
     states: list[WebStateSpec] = Field(min_length=1)
     content_slots: list[WebContentSlot] = Field(min_length=1)
     acceptance_checks: list[WebAcceptanceCheck] = Field(min_length=1)

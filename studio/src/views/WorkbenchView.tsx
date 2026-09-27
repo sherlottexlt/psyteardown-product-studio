@@ -76,6 +76,11 @@ export function WorkbenchView({
   onExecuteProduct,
   onRepairProduct,
   onExportProduct,
+  onPauseGeneration,
+  onResumeGeneration,
+  onCancelGeneration,
+  onCancelExecution,
+  onRetryExecution,
   preview,
   sourceModel,
 }: {
@@ -93,6 +98,11 @@ export function WorkbenchView({
   onExecuteProduct: () => void;
   onRepairProduct: () => void;
   onExportProduct?: () => void;
+  onPauseGeneration?: () => Promise<void>;
+  onResumeGeneration?: () => Promise<void>;
+  onCancelGeneration?: () => Promise<void>;
+  onCancelExecution?: () => Promise<void>;
+  onRetryExecution?: () => Promise<void>;
   preview?: {
     url: (bundleId: string) => string;
     policy: import("../api/types").PreviewFeedbackPolicy | null;
@@ -111,6 +121,9 @@ export function WorkbenchView({
 }) {
   const modelJob = generationJob?.materialization_kind === "model" ? generationJob : null;
   const modelPolicy = sourceModel?.policy ?? null;
+  const primaryFlowTasks = (view.web_generation_contract?.primary_flow_task_ids ?? [])
+    .map((taskId) => view.web_generation_contract?.tasks.find((task) => task.task_id === taskId))
+    .filter((task): task is NonNullable<typeof task> => Boolean(task));
   const bundleMatchesExecution = Boolean(
     deliveryBundle && executionJob && deliveryBundle.execution_job_revision_id === executionJob.revision_id,
   );
@@ -203,6 +216,13 @@ export function WorkbenchView({
             <div><dt>页面 / 任务</dt><dd>{view.web_generation_contract.screens.length} / {view.web_generation_contract.tasks.length}</dd></div>
             <div><dt>运行边界</dt><dd>local fixture only · no network</dd></div>
           </dl>
+          {primaryFlowTasks.length ? (
+            <div className="primary-flow-summary" aria-label="主体验路径">
+              <div><p className="eyebrow">Primary journey</p><h3>真实使用只沿这条路径</h3></div>
+              <ol>{primaryFlowTasks.map((task, index) => <li key={task.task_id}><span>{index + 1}</span><div><strong>{task.goal}</strong><small>{task.success_criteria}</small></div></li>)}</ol>
+              <p>先完成这条连续路径，再看旁支按钮；它是后续真实任务观察的唯一主链路。</p>
+            </div>
+          ) : null}
           <p className="unknown-copy">这是待确认的生成输入，不是源码、运行实例或真实结果。确认后仍需 B3 的 workspace、预算和沙箱 Gate。</p>
           {view.web_generation_contract.status === "proposed" && view.web_generation_contract.meta.revision > 1 ? (
             <p className="unknown-copy">
@@ -226,7 +246,15 @@ export function WorkbenchView({
                   {modelPolicy?.available ? `用模型写源码 · ${modelPolicy.provider} ${modelPolicy.model}` : "模型写源码（未配置）"}
                 </button>
               ) : null}
-              {generationJob ? <Badge tone={generationJob.status === "succeeded" ? "good" : "warn"}>{generationJob.status} · {generationJob.consumed_files} files</Badge> : null}
+              {generationJob ? <Badge tone={generationJob.status === "succeeded" ? "good" : generationJob.status === "failed" || generationJob.status === "budget_exhausted" ? "danger" : "warn"}>{generationJob.status} · {generationJob.consumed_files} files</Badge> : null}
+              {generationJob && ["queued", "running"].includes(generationJob.status) ? <>
+                {onPauseGeneration ? <button className="button button--quiet" disabled={busy} onClick={() => void onPauseGeneration()}>暂停</button> : null}
+                {onCancelGeneration ? <button className="button button--quiet" disabled={busy} onClick={() => void onCancelGeneration()}>取消</button> : null}
+              </> : null}
+              {generationJob?.status === "paused" ? <>
+                {onResumeGeneration ? <button className="button button--quiet" disabled={busy} onClick={() => void onResumeGeneration()}>继续生成</button> : null}
+                {onCancelGeneration ? <button className="button button--quiet" disabled={busy} onClick={() => void onCancelGeneration()}>取消</button> : null}
+              </> : null}
             </div>
           ) : null}
           {sourceModel && view.web_generation_contract.status === "confirmed" ? (
@@ -262,7 +290,13 @@ export function WorkbenchView({
               {executionJob ? <Badge tone={executionJob.status === "succeeded" ? "good" : "warn"}>{executionJob.status} · {executionJob.checkpoint_step ?? "queued"}</Badge> : null}
             </div>
           ) : null}
-          {executionJob ? <p className="unknown-copy">B4 执行边界：依赖安装、构建、loopback 预览与 Chromium/axe 检查；无 Secret，运行时无外网。执行日志仅保留安全摘要。</p> : null}
+          {executionJob ? <>
+            <p className="unknown-copy">B4 执行边界：依赖安装、构建、loopback 预览与 Chromium/axe 检查；无 Secret，运行时无外网。执行日志仅保留安全摘要。</p>
+            <div className="panel__actions">
+              {executionJob.status === "running" && onCancelExecution ? <button className="button button--quiet" disabled={busy} onClick={() => void onCancelExecution()}>停止验证</button> : null}
+              {["failed", "budget_exhausted", "stale_input"].includes(executionJob.status) && onRetryExecution ? <button className="button button--quiet" disabled={busy} onClick={() => void onRetryExecution()}>重试验证</button> : null}
+            </div>
+          </> : null}
           {executionJob && ["failed", "budget_exhausted"].includes(executionJob.status) ? (
             <div className="panel__actions">
               <button className="button button--quiet" disabled={busy} onClick={onRepairProduct}>

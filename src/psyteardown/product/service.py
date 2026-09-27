@@ -124,6 +124,11 @@ class ProductApplicationService:
             reason=command.reason,
         )
 
+    def list_projects(self) -> tuple[ProductProject, ...]:
+        """Return current projects for local workspace recovery."""
+        values = self.repository.list_current("product_project")
+        return tuple(sorted(values, key=lambda item: item.meta.created_at, reverse=True))
+
     def change_project_status(
         self, command: ChangeProductProjectStatus
     ) -> ProductProject:

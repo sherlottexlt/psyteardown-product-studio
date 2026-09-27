@@ -72,6 +72,7 @@ def create_app(
     source_model: ProductSourceModel | None = None,
     allowed_hosts: Sequence[str] = tuple(DEFAULT_ALLOWED_HOSTS),
     allowed_origins: Sequence[str] = DEFAULT_ALLOWED_ORIGINS,
+    c1_trial_enabled: bool | None = None,
 ) -> FastAPI:
     """Create an API app without opening persistence until lifespan starts."""
 
@@ -79,6 +80,11 @@ def create_app(
     resolved_path = Path(
         database_path
         or os.getenv("PSYTEARDOWN_PRODUCT_STORE", str(DEFAULT_PRODUCT_STORE))
+    )
+    resolved_c1_trial_enabled = (
+        c1_trial_enabled
+        if c1_trial_enabled is not None
+        else os.getenv("PSYTEARDOWN_C1_TRIAL_ENABLED", "0").strip().lower() in {"1", "true", "yes"}
     )
 
     @asynccontextmanager
@@ -154,6 +160,7 @@ def create_app(
             )
             app.state.product_c1_service = ProductC1ObservationService(
                 service, app.state.product_delivery_bundle_service, InMemoryC1Repository(),
+                trial_enabled=resolved_c1_trial_enabled,
                 **({"clock": clock} if clock is not None else {}),
                 **({"id_factory": id_factory} if id_factory is not None else {}),
             )
@@ -217,7 +224,9 @@ def create_app(
             )
             app.state.product_c1_service = ProductC1ObservationService(
                 app.state.product_service, app.state.product_delivery_bundle_service,
-                SQLiteC1Repository(resolved_path), **kwargs,
+                SQLiteC1Repository(resolved_path),
+                trial_enabled=resolved_c1_trial_enabled,
+                **kwargs,
             )
         try:
             yield

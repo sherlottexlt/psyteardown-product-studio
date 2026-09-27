@@ -180,3 +180,41 @@ test("fake provider jobs form a human-confirmed Product Contract", async ({ page
   await expect(page.getByRole("button", { name: "开始本地 C1 试用" })).toBeDisabled();
   await expectNoSeriousAccessibilityViolations(page);
 });
+
+
+test("workspace recovery resumes a queued proposal job", async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const projectResponse = await page.request.post("/api/v1/projects", {
+    data: {
+      name: `可恢复工作区 ${suffix}`,
+      collaboration_mode: "managed",
+      actor: "e2e-user",
+      reason: "create recovery fixture",
+      created_from: [],
+    },
+  });
+  expect(projectResponse.ok()).toBeTruthy();
+  const project = await projectResponse.json();
+  const jobResponse = await page.request.post(`/api/v1/projects/${project.project_id}/proposal-jobs`, {
+    data: {
+      kind: "product_intent",
+      raw_input: "恢复后继续处理专注工作中的无关打断",
+      provider: "deterministic_fake",
+      actor: "e2e-user",
+      reason: "queue recovery fixture",
+    },
+  });
+  expect(jobResponse.status()).toBe(202);
+
+  await page.goto("/");
+  const projectButton = page.getByRole("button", { name: new RegExp(`可恢复工作区 ${suffix}`) });
+  await expect(projectButton).toBeVisible();
+  await projectButton.click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${project.project_id}`));
+  await expect(page.getByText("发现未完成工作", { exact: true })).toBeVisible();
+  await expect(page.getByText(/提案 Job（product_intent）/)).toBeVisible();
+
+  await page.getByRole("button", { name: "继续这项工作" }).click();
+  await expect(page.getByRole("heading", { name: "恢复后继续处理专注工作中的无关打断" })).toBeVisible();
+  await expect(page.getByText("发现未完成工作", { exact: true })).toBeHidden();
+});

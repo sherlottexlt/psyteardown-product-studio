@@ -82,6 +82,15 @@ async def create_project(
 
 
 @router.get(
+    "",
+    response_model=list[ProductProjectResponse],
+    responses=ERROR_RESPONSES,
+)
+async def list_projects(service: Service) -> list[ProductProjectResponse]:
+    return [ProductProjectResponse.from_domain(project) for project in service.list_projects()]
+
+
+@router.get(
     "/{project_id}",
     response_model=ProductProjectViewResponse,
     responses=ERROR_RESPONSES,

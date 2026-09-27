@@ -1,6 +1,6 @@
-import { type FormEvent, useState } from "react";
-import { createProject, createProposalJob, runProposalJob } from "../api/client";
-import type { CollaborationMode } from "../api/types";
+import { type FormEvent, useEffect, useState } from "react";
+import { createProject, createProposalJob, listProjects, runProposalJob } from "../api/client";
+import type { CollaborationMode, ProductProject } from "../api/types";
 import { formatApiError } from "../domain/project";
 
 export function NewProject({
@@ -15,6 +15,12 @@ export function NewProject({
   const [mode, setMode] = useState<CollaborationMode>("managed");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [projects, setProjects] = useState<ProductProject[]>([]);
+  useEffect(() => {
+    let active = true;
+    void listProjects().then((values) => { if (active) setProjects(values); }).catch(() => { /* the new-project form remains usable when recovery is unavailable */ });
+    return () => { active = false; };
+  }, []);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -29,6 +35,7 @@ export function NewProject({
         projectId: project.project_id,
         kind: "product_intent",
         rawInput: desiredChange.trim(),
+        provider: "deterministic_fake",
       });
       const completed = await runProposalJob({
         projectId: project.project_id,
@@ -51,7 +58,7 @@ export function NewProject({
     }
   }
 
-  const valid = Boolean(name.trim() && desiredChange.trim());
+  const valid = Boolean(name.trim() && desiredChange.trim() && desiredChange.trim().length <= 4000);
 
   return (
     <main className="landing-shell">
@@ -93,15 +100,17 @@ export function NewProject({
                 autoFocus
               />
             </label>
-            <label>
-              用一句不完整的话描述你想改变的现实
-              <textarea
-                value={desiredChange}
-                onChange={(event) => setDesiredChange(event.target.value)}
-                placeholder="我希望独立工作时，不再被无关消息不断打断……"
-                rows={4}
-              />
-            </label>
+            <label htmlFor="desired-change">用一句不完整的话描述你想改变的现实</label>
+            <textarea
+              id="desired-change"
+              value={desiredChange}
+              onChange={(event) => setDesiredChange(event.target.value.slice(0, 4000))}
+              placeholder="我希望独立工作时，不再被无关消息不断打断……"
+              rows={4}
+              maxLength={4000}
+              aria-describedby="desired-change-help"
+            />
+            <small id="desired-change-help" className="field-hint">{desiredChange.length}/4000 · 只在本地 Product Studio 保存并发送给所选 provider。</small>
             <label>
               协作方式
               <select value={mode} onChange={(event) => setMode(event.target.value as CollaborationMode)}>
@@ -112,11 +121,24 @@ export function NewProject({
             </label>
             {error ? <p className="form-error" role="alert">{error}</p> : null}
             <button className="button button--primary button--wide" disabled={!valid || submitting}>
-              {submitting ? "正在保存原始输入并形成提案…" : "建立产品工作空间"}
+              {submitting ? "正在保存原始输入并形成离线提案…" : "建立产品工作空间"}
               <span aria-hidden="true">↗</span>
             </button>
           </form>
-          {lastProjectId ? (
+          {projects.length ? (
+            <section className="recent-projects" aria-label="最近的产品工作空间">
+              <div className="recent-projects__heading"><span className="eyebrow">Recent workspaces</span><small>项目保存在本地，可随时恢复未完成工作。</small></div>
+              <ul>
+                {projects.slice(0, 6).map((project: ProductProject) => (
+                  <li key={project.project_id}>
+                    <button type="button" onClick={() => onCreated(project.project_id)}>
+                      <strong>{project.name}</strong><small>{project.project_id} · {project.status === "active" ? "进行中" : project.status === "paused" ? "已暂停" : "已归档"}</small>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : lastProjectId ? (
             <button className="text-button" onClick={() => onCreated(lastProjectId)} type="button">
               继续上次项目 <span>{lastProjectId}</span>
             </button>

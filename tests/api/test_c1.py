@@ -123,7 +123,7 @@ def test_c1_domain_requires_explicit_consent_and_enforces_source_ceiling():
 
 def test_c1_api_pins_plan_and_delivery_then_withdraws_source_rows(tmp_path):
     database = tmp_path / "product.sqlite3"
-    with TestClient(create_app(database_path=database)) as client:
+    with TestClient(create_app(database_path=database, c1_trial_enabled=True)) as client:
         project_id, plan, bundle, contract = _c1_setup(client)
         start = client.post(
             f"/api/v1/projects/{project_id}/c1/envelopes",
@@ -219,7 +219,7 @@ def test_c1_api_pins_plan_and_delivery_then_withdraws_source_rows(tmp_path):
         assert withdrawn.json()["deleted_observations"] == 1
         assert client.get(f"/api/v1/projects/{project_id}/c1/envelopes/{envelope['envelope_id']}/observations").json() == []
 
-    with TestClient(create_app(database_path=database)) as restarted:
+    with TestClient(create_app(database_path=database, c1_trial_enabled=True)) as restarted:
         assert restarted.get(f"/api/v1/projects/{project_id}/c1/envelopes/{envelope['envelope_id']}/observations").json() == []
         connection = sqlite3.connect(database)
         rows = connection.execute("SELECT object_json FROM c1_records").fetchall()
@@ -229,3 +229,38 @@ def test_c1_api_pins_plan_and_delivery_then_withdraws_source_rows(tmp_path):
         assert all(participant["participant_id"] not in str(row) for row in audit_rows)
 
 
+
+
+def test_c1_trial_is_paused_by_default(tmp_path):
+    with TestClient(create_app(database_path=tmp_path / "product.sqlite3")) as client:
+        policy = client.get("/api/v1/c1-policy")
+        assert policy.status_code == 200
+        assert policy.json()["trial_state"] == "paused"
+        assert "暂缓" in policy.json()["trial_status_message"]
+
+
+def test_c1_rejects_placeholder_reviewer(tmp_path):
+    database = tmp_path / "product.sqlite3"
+    with TestClient(create_app(database_path=database, c1_trial_enabled=True)) as client:
+        project_id, plan, bundle, contract = _c1_setup(client)
+        envelope = client.post(
+            f"/api/v1/projects/{project_id}/c1/envelopes",
+            json={"measurement_plan_revision_id": plan["revision_id"], "delivery_bundle_id": bundle["bundle_id"], "execution_job_revision_id": bundle["execution_job_revision_id"], "web_generation_contract_revision_id": contract["revision_id"], "host": "host-li", "actor": "host-li", "reason": "start"},
+        ).json()
+        enrolled = client.post(
+            f"/api/v1/projects/{project_id}/c1/envelopes/{envelope['envelope_id']}/participants",
+            json={"consent_policy_revision": "c1-local-v1", "consent_scope_acknowledged": True, "actor": "host-li", "reason": "consent"},
+        ).json()
+        presentation = client.post(
+            f"/api/v1/projects/{project_id}/c1/envelopes/{envelope['envelope_id']}/presentations",
+            json={"participant_id": enrolled["participant"]["participant_id"], "task_id": contract["tasks"][0]["task_id"], "actor": "host-li", "reason": "present"},
+        ).json()
+        observation = client.post(
+            f"/api/v1/projects/{project_id}/c1/envelopes/{envelope['envelope_id']}/observations",
+            json={"participant_id": enrolled["participant"]["participant_id"], "presentation_id": presentation["presentation_id"], "measure_id": plan["measures"][0]["measure_id"], "value": True, "status": "observed", "actor": "host-li", "reason": "observe"},
+        ).json()
+        review = client.post(
+            f"/api/v1/projects/{project_id}/c1/envelopes/{envelope['envelope_id']}/reviews",
+            json={"observation_ids": [observation["observation_id"]], "reviewer": "named-reviewer", "decision": "accepted", "evidence_level_after": "observed", "rationale": "review"},
+        )
+        assert review.status_code == 409

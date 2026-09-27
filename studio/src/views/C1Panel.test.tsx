@@ -29,6 +29,8 @@ vi.mock("../api/client", () => ({
 }));
 
 const policy = {
+  trial_state: "available",
+  trial_status_message: "本地 C1 试用可启动。",
   consent_policy_revision: "c1-local-v1",
   statement: "Only a random participant ID and structured task results are recorded.",
   access_policy: ["local_host", "named_reviewer"],
@@ -182,6 +184,7 @@ describe("C1Panel", () => {
 
     const reviewSelect = screen.getByRole("combobox", { name: "待审观察" });
     expect(reviewSelect).toHaveValue("observation-1");
+    await user.type(screen.getByLabelText("reviewer（需与 host 分离）"), "reviewer-li");
     await user.click(screen.getByRole("button", { name: "提交人工 review" }));
     await waitFor(() => expect(reviewC1Evidence).toHaveBeenCalledWith(expect.objectContaining({ observationIds: ["observation-1"] })));
   });

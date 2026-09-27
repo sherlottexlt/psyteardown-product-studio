@@ -62,7 +62,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Projects */
+        get: operations["list_projects_api_v1_projects_get"];
         put?: never;
         /** Create Project */
         post: operations["create_project_api_v1_projects_post"];
@@ -344,6 +345,23 @@ export interface paths {
         put?: never;
         /** Cancel Execution Job */
         post: operations["cancel_execution_job_api_v1_projects__project_id__execution_jobs__job_id__cancellations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/execution-jobs/{job_id}/recoveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recover Execution Job */
+        post: operations["recover_execution_job_api_v1_projects__project_id__execution_jobs__job_id__recoveries_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1209,6 +1227,13 @@ export interface components {
             source_layer: "research_observation";
             /** Statement */
             statement: string;
+            /**
+             * Trial State
+             * @enum {string}
+             */
+            trial_state: "paused" | "available";
+            /** Trial Status Message */
+            trial_status_message: string;
             /** Withdrawal Policy */
             withdrawal_policy: string;
         };
@@ -1647,6 +1672,11 @@ export interface components {
         ExecutionJobActionRequest: {
             /** Actor */
             actor: string;
+            /**
+             * Confirm Orphaned
+             * @default false
+             */
+            confirm_orphaned: boolean;
         };
         /** ExecutionJobResponse */
         ExecutionJobResponse: {
@@ -3457,6 +3487,8 @@ export interface components {
             content_slots: components["schemas"]["WebContentSlot"][];
             /** Outcome Contract Revision Id */
             outcome_contract_revision_id: string;
+            /** Primary Flow Task Ids */
+            primary_flow_task_ids?: string[];
             /** Product Thesis Revision Id */
             product_thesis_revision_id: string;
             /** Screens */
@@ -3500,6 +3532,8 @@ export interface components {
             outcome_contract_revision_id: string;
             /** Output Paths */
             output_paths: string[];
+            /** Primary Flow Task Ids */
+            primary_flow_task_ids?: string[];
             /** Product Thesis Revision Id */
             product_thesis_revision_id: string;
             /** Project Id */
@@ -3650,6 +3684,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PreviewFeedbackPolicyResponse"];
+                };
+            };
+        };
+    };
+    list_projects_api_v1_projects_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductProjectResponse"][];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Revision or domain-state conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Request or domain validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -4787,6 +4868,60 @@ export interface operations {
         };
     };
     cancel_execution_job_api_v1_projects__project_id__execution_jobs__job_id__cancellations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExecutionJobActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionJobResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Revision or domain-state conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Request or domain validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    recover_execution_job_api_v1_projects__project_id__execution_jobs__job_id__recoveries_post: {
         parameters: {
             query?: never;
             header?: never;

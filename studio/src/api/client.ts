@@ -94,6 +94,10 @@ export function createProject(input: {
   });
 }
 
+export function listProjects(): Promise<ProductProject[]> {
+  return request("/api/v1/projects");
+}
+
 export function getProject(projectId: string): Promise<ProductProjectView> {
   return request(`/api/v1/projects/${encodeURIComponent(projectId)}`);
 }
@@ -317,6 +321,16 @@ export function runProposalJob(input: {
   );
 }
 
+export function retryProposalJob(input: {
+  projectId: string;
+  jobId: string;
+}): Promise<ProductProposalJob> {
+  return request(
+    `/api/v1/projects/${encodeURIComponent(input.projectId)}/proposal-jobs/${encodeURIComponent(input.jobId)}/retries`,
+    { method: "POST", body: JSON.stringify({ actor: "local-user" }) },
+  );
+}
+
 export function listProposalJobs(projectId: string): Promise<ProductProposalJob[]> {
   return request(
     `/api/v1/projects/${encodeURIComponent(projectId)}/proposal-jobs`,
@@ -491,6 +505,27 @@ export function runGenerationJob(input: {
   );
 }
 
+export function pauseGenerationJob(input: { projectId: string; jobId: string }): Promise<ProductGenerationJob> {
+  return request(`/api/v1/projects/${encodeURIComponent(input.projectId)}/generation-jobs/${encodeURIComponent(input.jobId)}/pauses`, {
+    method: "POST",
+    body: JSON.stringify({ actor: "local-user" }),
+  });
+}
+
+export function resumeGenerationJob(input: { projectId: string; jobId: string }): Promise<ProductGenerationJob> {
+  return request(`/api/v1/projects/${encodeURIComponent(input.projectId)}/generation-jobs/${encodeURIComponent(input.jobId)}/resumes`, {
+    method: "POST",
+    body: JSON.stringify({ actor: "local-user" }),
+  });
+}
+
+export function cancelGenerationJob(input: { projectId: string; jobId: string }): Promise<ProductGenerationJob> {
+  return request(`/api/v1/projects/${encodeURIComponent(input.projectId)}/generation-jobs/${encodeURIComponent(input.jobId)}/cancellations`, {
+    method: "POST",
+    body: JSON.stringify({ actor: "local-user" }),
+  });
+}
+
 export function listGenerationJobs(projectId: string): Promise<ProductGenerationJob[]> {
   return request(
     `/api/v1/projects/${encodeURIComponent(projectId)}/generation-jobs`,
@@ -525,6 +560,27 @@ export function runExecutionJob(input: {
       body: JSON.stringify({ actor: "local-worker" }),
     },
   );
+}
+
+export function recoverExecutionJob(input: { projectId: string; jobId: string }): Promise<import("./types").ProductExecutionJob> {
+  return request(`/api/v1/projects/${encodeURIComponent(input.projectId)}/execution-jobs/${encodeURIComponent(input.jobId)}/recoveries`, {
+    method: "POST",
+    body: JSON.stringify({ actor: "local-user", confirm_orphaned: true }),
+  });
+}
+
+export function cancelExecutionJob(input: { projectId: string; jobId: string }): Promise<import("./types").ProductExecutionJob> {
+  return request(`/api/v1/projects/${encodeURIComponent(input.projectId)}/execution-jobs/${encodeURIComponent(input.jobId)}/cancellations`, {
+    method: "POST",
+    body: JSON.stringify({ actor: "local-user" }),
+  });
+}
+
+export function retryExecutionJob(input: { projectId: string; jobId: string }): Promise<import("./types").ProductExecutionJob> {
+  return request(`/api/v1/projects/${encodeURIComponent(input.projectId)}/execution-jobs/${encodeURIComponent(input.jobId)}/retries`, {
+    method: "POST",
+    body: JSON.stringify({ actor: "local-user" }),
+  });
 }
 
 export function listExecutionJobs(projectId: string): Promise<import("./types").ProductExecutionJob[]> {

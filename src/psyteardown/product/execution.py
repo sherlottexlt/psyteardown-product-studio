@@ -167,7 +167,9 @@ class SubprocessExecutionCommandRunner:
         env: Mapping[str, str],
     ) -> tuple[CommandResult, CommandResult]:
         started = time.monotonic()
-        if _loopback_port_open(_PREVIEW_PORT):
+        preview_port = _preview_port_from_argv(preview_argv)
+        preview_url = f"http://127.0.0.1:{preview_port}"
+        if _loopback_port_open(preview_port):
             # Validating whatever already listens there would verify another
             # workspace (or an orphan from an earlier run), not this one.
             raise ExecutionCommandError("preview_port_busy", "The loopback preview port is already in use.")
@@ -203,7 +205,7 @@ class SubprocessExecutionCommandRunner:
                 browser_argv,
                 cwd=cwd,
                 timeout=remaining,
-                env={**env, "BASE_URL": _PREVIEW_URL},
+                env={**env, "BASE_URL": preview_url},
                 failure_code="browser_command_failed",
             )
             preview = CommandResult(exit_code=0, output_bytes=0, duration_seconds=time.monotonic() - started, summary="Local preview served on loopback.")
@@ -252,6 +254,23 @@ class SubprocessExecutionCommandRunner:
 
 _PREVIEW_PORT = 4173
 _PREVIEW_URL = f"http://127.0.0.1:{_PREVIEW_PORT}"
+
+
+def _preview_port_from_argv(argv: Sequence[str]) -> int:
+    try:
+        index = list(argv).index("--port")
+        return int(argv[index + 1])
+    except (ValueError, IndexError, TypeError):
+        return _PREVIEW_PORT
+
+
+def _select_preview_port() -> int:
+    """Prefer the documented port, then fall back to an available local port."""
+    if not _loopback_port_open(_PREVIEW_PORT):
+        return _PREVIEW_PORT
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
 
 
 def _loopback_port_open(port: int) -> bool:
@@ -400,7 +419,7 @@ class ProductExecutionJobService:
             build = self.runner.run([_npm(), "run", "build"], cwd=workspace, timeout=self._remaining(running, started), env=env)
             running = self._step_transition(running, "build", build, actor)
             preview, browser = self.runner.run_preview_and_browser(
-                preview_argv=[_npm(), "run", "preview", "--", "--host", "127.0.0.1", "--port", "4173"],
+                preview_argv=[_npm(), "run", "preview", "--", "--host", "127.0.0.1", "--port", str(_select_preview_port())],
                 browser_argv=[_npx(), "--no-install", "playwright", "test", "--config", "playwright.config.ts"],
                 cwd=workspace, timeout=self._remaining(running, started), env=env,
             )
@@ -440,6 +459,38 @@ class ProductExecutionJobService:
             consumed_duration_seconds=time.monotonic() - started,
             build_artifact_relative_path="dist/",
             browser_report_relative_path="test-results/",
+        )
+
+    def recover_job(
+        self,
+        project_id: str,
+        job_id: str,
+        *,
+        actor: str,
+        confirm_orphaned: bool = False,
+    ) -> ProductExecutionJob:
+        """Requeue a persisted running job after the client/process was interrupted.
+
+        This is deliberately explicit: the service cannot prove whether an old
+        subprocess is still alive, so the caller must confirm that the job is
+        orphaned before another run may start.
+        """
+        job = self.get_job(project_id, job_id)
+        if job.status != "running":
+            raise DomainStateError("only running execution jobs can be recovered")
+        if not confirm_orphaned:
+            raise DomainStateError("confirm that the running execution is orphaned before recovery")
+        return self._transition(
+            job,
+            status="queued",
+            actor=actor,
+            reason="recovered orphaned execution after local interruption",
+            checkpoint_step=None,
+            steps=(),
+            consumed_duration_seconds=0,
+            consumed_output_bytes=0,
+            error_code=None,
+            error_summary=None,
         )
 
     def cancel_job(self, project_id: str, job_id: str, *, actor: str) -> ProductExecutionJob:

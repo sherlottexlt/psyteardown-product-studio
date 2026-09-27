@@ -33,6 +33,7 @@ from psyteardown.product import (
     C1_EVIDENCE_CEILING,
     C1_RETENTION_POLICY,
     C1_SOURCE_LAYER,
+    C1_TRIAL_PAUSED_MESSAGE,
     C1_WITHDRAWAL_POLICY,
     ProductC1ObservationService,
 )
@@ -43,8 +44,10 @@ C1Service = Annotated[ProductC1ObservationService, Depends(get_product_c1_servic
 
 
 @router.get("/c1-policy", response_model=C1PolicyResponse)
-async def get_c1_policy() -> C1PolicyResponse:
+async def get_c1_policy(service: C1Service) -> C1PolicyResponse:
     return C1PolicyResponse(
+        trial_state="available" if service.trial_enabled else "paused",
+        trial_status_message="本地 C1 试用可启动。" if service.trial_enabled else C1_TRIAL_PAUSED_MESSAGE,
         consent_policy_revision=C1_CONSENT_POLICY_REVISION,
         statement=C1_CONSENT_STATEMENT,
         access_policy=list(C1_ACCESS_POLICY),

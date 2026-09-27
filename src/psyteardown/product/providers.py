@@ -452,6 +452,7 @@ class DeterministicFakeProductContractProvider:
         interruption_screen = f"{suggestion_id}-interruption-screen"
         start_task = f"{suggestion_id}-start-focus"
         interrupt_task = f"{suggestion_id}-handle-interruption"
+        finish_task = f"{suggestion_id}-finish-focus"
         stop_task = f"{suggestion_id}-stop-recover"
         state_ids = {
             kind: f"{suggestion_id}-{kind}" for kind in
@@ -466,7 +467,7 @@ class DeterministicFakeProductContractProvider:
                     screen_id=focus_screen,
                     title="Focus session",
                     purpose="Declare a bounded focus session and show the user's current control boundary.",
-                    task_ids=(start_task, stop_task),
+                    task_ids=(start_task, finish_task, stop_task),
                     state_ids=(state_ids["ready"], state_ids["loading"], state_ids["success"], state_ids["paused"], state_ids["stopped"]),
                 ),
                 WebScreenSpec(
@@ -481,16 +482,23 @@ class DeterministicFakeProductContractProvider:
                 WebTaskSpec(
                     task_id=start_task,
                     screen_id=focus_screen,
-                    goal="Start a 25–60 minute self-directed focus session without connecting an external account.",
-                    success_criteria="The session is visibly active and can be stopped or resumed immediately.",
+                    goal="Declare one concrete task and start a bounded 10-minute focus session.",
+                    success_criteria="The session is visibly active and the next action is clear.",
                     user_decision_limit="One setup decision; no hidden defaults that delay urgent contact.",
                 ),
                 WebTaskSpec(
                     task_id=interrupt_task,
                     screen_id=interruption_screen,
-                    goal="Make one explicit decision about a local fixture interruption.",
-                    success_criteria="The user can allow, defer, or stop without message content leaving the fixture.",
+                    goal="Make one explicit decision about a local non-urgent interruption.",
+                    success_criteria="The user can allow it now, defer it, or stop without message content leaving the fixture.",
                     user_decision_limit="At most one decision per surfaced interruption.",
+                ),
+                WebTaskSpec(
+                    task_id=finish_task,
+                    screen_id=focus_screen,
+                    goal="Return to the declared task, complete the bounded work unit, and see what was deferred.",
+                    success_criteria="The task completion and deferred interruption are both visible; no outcome is claimed automatically.",
+                    user_decision_limit="One completion decision; the user can still stop or recover.",
                 ),
                 WebTaskSpec(
                     task_id=stop_task,
@@ -500,6 +508,7 @@ class DeterministicFakeProductContractProvider:
                     user_decision_limit="No confirmation wall before stop or recovery.",
                 ),
             ],
+            primary_flow_task_ids=[start_task, interrupt_task, finish_task],
             states=[
                 WebStateSpec(state_id=state_ids["ready"], kind="ready", user_visible_behavior="Show the next available focus action and boundary.", recovery_action="Start or leave the session."),
                 WebStateSpec(state_id=state_ids["loading"], kind="loading", user_visible_behavior="Show a deterministic local transition without implying network activity.", recovery_action="Wait briefly or stop the local transition."),
@@ -513,11 +522,13 @@ class DeterministicFakeProductContractProvider:
                 WebContentSlot(slot_id=f"{suggestion_id}-title", semantic_role="heading", description="Name the focus session without claiming a measured result.", source_kind="product_thesis", fallback_text="Focus session"),
                 WebContentSlot(slot_id=f"{suggestion_id}-goal", semantic_role="instruction", description="Explain the declared task boundary in the user's own terms.", source_kind="outcome_contract", fallback_text="Choose a focus task and duration."),
                 WebContentSlot(slot_id=f"{suggestion_id}-control", semantic_role="status", description="State that stop, recovery, and urgent contact controls remain available.", source_kind="outcome_contract", fallback_text="You can stop or recover this intervention at any time."),
+                WebContentSlot(slot_id=f"{suggestion_id}-next", semantic_role="instruction", description="Tell the user the next action in the primary flow without claiming an outcome.", source_kind="outcome_contract", fallback_text="Next: complete the declared focus task."),
                 WebContentSlot(slot_id=f"{suggestion_id}-error", semantic_role="error", description="Give a safe local recovery instruction without message content.", source_kind="local_fixture", fallback_text="Something went wrong locally. Retry or stop."),
             ],
             acceptance_checks=[
-                WebAcceptanceCheck(check_id=f"{suggestion_id}-start-check", task_id=start_task, assertion="Start task reaches an active session without a network request."),
-                WebAcceptanceCheck(check_id=f"{suggestion_id}-interrupt-check", task_id=interrupt_task, assertion="Interruption task presents exactly one explicit decision and preserves local-only data boundary."),
+                WebAcceptanceCheck(check_id=f"{suggestion_id}-start-check", task_id=start_task, assertion="Start task reaches an active 10-minute session, exposes the next action, and makes the declared task visible without a network request."),
+                WebAcceptanceCheck(check_id=f"{suggestion_id}-interrupt-check", task_id=interrupt_task, assertion="Interruption task presents exactly one explicit allow/defer/stop decision and preserves local-only data boundary."),
+                WebAcceptanceCheck(check_id=f"{suggestion_id}-finish-check", task_id=finish_task, assertion="The primary flow returns to the declared task, makes completion visible, and exposes the deferred interruption without claiming a measured outcome."),
                 WebAcceptanceCheck(check_id=f"{suggestion_id}-stop-check", task_id=stop_task, assertion="Stop and recovery are available from every active or paused state."),
             ],
             source_refs=[

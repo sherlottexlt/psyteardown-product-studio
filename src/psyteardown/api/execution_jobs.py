@@ -96,6 +96,27 @@ async def cancel_execution_job(
 
 
 @router.post(
+    "/{project_id}/execution-jobs/{job_id}/recoveries",
+    response_model=ExecutionJobResponse,
+    responses=ERROR_RESPONSES,
+)
+async def recover_execution_job(
+    project_id: str,
+    job_id: str,
+    request: ExecutionJobActionRequest,
+    service: ExecutionService,
+) -> ExecutionJobResponse:
+    return ExecutionJobResponse.from_domain(
+        service.recover_job(
+            project_id,
+            job_id,
+            actor=request.actor,
+            confirm_orphaned=request.confirm_orphaned,
+        )
+    )
+
+
+@router.post(
     "/{project_id}/execution-jobs/{job_id}/retries",
     response_model=ExecutionJobResponse,
     responses=ERROR_RESPONSES,

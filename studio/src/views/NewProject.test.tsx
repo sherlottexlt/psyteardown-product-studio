@@ -1,17 +1,18 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createProject, createProposalJob, runProposalJob } from "../api/client";
+import { createProject, createProposalJob, listProjects, runProposalJob } from "../api/client";
 import { NewProject } from "./NewProject";
 
 vi.mock("../api/client", () => ({
   createProject: vi.fn(),
   createProposalJob: vi.fn(),
+  listProjects: vi.fn(),
   runProposalJob: vi.fn(),
 }));
 
 describe("NewProject", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); vi.mocked(listProjects).mockResolvedValue([]); });
 
   it("persists raw input through a proposal job before opening the project", async () => {
     const createProjectMock = vi.mocked(createProject);
@@ -40,6 +41,7 @@ describe("NewProject", () => {
       projectId: "project-1",
       kind: "product_intent",
       rawInput: "减少不必要的工作打断",
+      provider: "deterministic_fake",
     });
     expect(runProposalJob).toHaveBeenCalledWith({
       projectId: "project-1",

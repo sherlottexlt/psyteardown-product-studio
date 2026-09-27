@@ -9,7 +9,14 @@ import {
   listExecutionJobs,
   runGenerationJob,
   retryGenerationJob,
+  retryProposalJob,
   getSourceModelPolicy,
+  cancelExecutionJob,
+  recoverExecutionJob,
+  retryExecutionJob,
+  pauseGenerationJob,
+  resumeGenerationJob,
+  cancelGenerationJob,
   runExecutionJob,
   createRepairJob,
   listRepairJobs,
@@ -55,6 +62,7 @@ import { ContractView } from "./ContractView";
 import { DecisionsView } from "./DecisionsView";
 import { EvidenceView } from "./EvidenceView";
 import { C1Panel } from "./C1Panel";
+import { MainlineGuide } from "../components/MainlineGuide";
 import { WorkbenchView } from "./WorkbenchView";
 import type { PreviewFeedbackDraft } from "./PreviewFeedbackPanel";
 
@@ -76,9 +84,11 @@ function modeLabel(mode: string): string {
 
 export function ProjectStudio({ projectId, onExit }: { projectId: string; onExit: () => void }) {
   const [area, setArea] = useState<Area>("contract");
+  // Keep the local path deterministic; real DeepSeek remains an explicit provider choice.
   const [proposalProvider, setProposalProvider] = useState<ProposalProvider>("deterministic_fake");
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [resumingPending, setResumingPending] = useState(false);
   const query = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => getProject(projectId),
@@ -149,6 +159,45 @@ export function ProjectStudio({ projectId, onExit }: { projectId: string; onExit
     } finally {
       setBusy(false);
     }
+  }
+
+  async function resumePendingWork() {
+    const pendingGeneration = generationJobsQuery.data?.at(-1);
+    const pendingExecution = executionJobsQuery.data?.at(-1);
+    const pendingProposal = jobsQuery.data?.at(-1);
+    setResumingPending(true);
+    setActionError(null);
+    try {
+      if (pendingProposal && ["queued", "running"].includes(pendingProposal.status)) {
+        await runProposalJob({ projectId, jobId: pendingProposal.job_id });
+      } else if (pendingGeneration && pendingGeneration.status === "paused") {
+        await resumeGenerationJob({ projectId, jobId: pendingGeneration.job_id });
+        await runGenerationJob({ projectId, jobId: pendingGeneration.job_id });
+      } else if (pendingGeneration && ["queued", "running"].includes(pendingGeneration.status)) {
+        await runGenerationJob({ projectId, jobId: pendingGeneration.job_id });
+      } else if (pendingExecution && pendingExecution.status === "queued") {
+        await runExecutionJob({ projectId, jobId: pendingExecution.job_id });
+      } else if (pendingExecution && pendingExecution.status === "running") {
+        await recoverExecutionJob({ projectId, jobId: pendingExecution.job_id });
+        await runExecutionJob({ projectId, jobId: pendingExecution.job_id });
+      }
+      await Promise.all([query.refetch(), jobsQuery.refetch(), generationJobsQuery.refetch(), executionJobsQuery.refetch(), deliveryBundlesQuery.refetch()]);
+    } catch (error) {
+      setActionError(formatApiError(error));
+    } finally {
+      setResumingPending(false);
+    }
+  }
+
+  function pendingWorkLabel(): string | null {
+    const proposal = jobsQuery.data?.at(-1);
+    if (proposal && ["queued", "running"].includes(proposal.status)) return `提案 Job（${proposal.kind}）`;
+    const generation = generationJobsQuery.data?.at(-1);
+    if (generation && ["queued", "running", "paused"].includes(generation.status)) return `产品生成 Job（${generation.status}）`;
+    const execution = executionJobsQuery.data?.at(-1);
+    if (execution && execution.status === "queued") return "本地验证 Job（queued）";
+    if (execution && execution.status === "running") return "本地验证 Job（上次中断，需确认恢复）";
+    return null;
   }
 
   function handleConfirm(
@@ -273,6 +322,22 @@ export function ProjectStudio({ projectId, onExit }: { projectId: string; onExit
         return { status: "conflict", latestRevision: refreshed.data?.outcome_contract?.meta.revision ?? contract.meta.revision };
       }
       return { status: "error", message: formatApiError(error) };
+    } finally { setBusy(false); }
+  }
+
+  async function handleRetryProposal() {
+    const job = jobsQuery.data?.at(-1);
+    if (!job || !["failed", "stale_input"].includes(job.status)) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const queued = await retryProposalJob({ projectId, jobId: job.job_id });
+      await jobsQuery.refetch();
+      const completed = await runProposalJob({ projectId, jobId: queued.job_id });
+      await Promise.all([query.refetch(), jobsQuery.refetch()]);
+      if (completed.status !== "succeeded") setActionError(completed.error_summary ?? "提案重试没有成功完成。");
+    } catch (error) {
+      setActionError(formatApiError(error));
     } finally { setBusy(false); }
   }
 
@@ -471,10 +536,20 @@ export function ProjectStudio({ projectId, onExit }: { projectId: string; onExit
           <div><button className="icon-button" onClick={() => void query.refetch()} title="刷新" aria-label="刷新项目">↻</button><span className="topbar-separator" /><span className="save-status">所有结构化更改由后端保存</span></div>
         </header>
         <nav className="mobile-nav" aria-label="移动端产品工作区">{navigation.map((item) => <button className={area === item.id ? "is-active" : ""} onClick={() => setArea(item.id)} key={item.id}>{item.label}</button>)}</nav>
+        <MainlineGuide
+          view={view}
+          generationJob={generationJobsQuery.data?.at(-1) ?? null}
+          executionJob={executionJobsQuery.data?.at(-1) ?? null}
+          deliveryBundle={deliveryBundlesQuery.data?.at(-1) ?? null}
+          onNavigate={setArea}
+          pendingWorkLabel={pendingWorkLabel()}
+          onResumePending={() => void resumePendingWork()}
+          pendingWorkBusy={resumingPending}
+        />
         {actionError ? <div className="action-error" role="alert"><span>{actionError}</span><button onClick={() => setActionError(null)}>关闭</button></div> : null}
         <div className="studio-content">
           {area === "command" ? <CommandView view={view} /> : null}
-          {area === "contract" ? <ContractView view={view} busy={busy} latestJob={jobsQuery.data?.at(-1) ?? null} proposalProvider={proposalProvider} onProposalProviderChange={setProposalProvider} onGenerate={handleGenerate} onReviseIntent={handleIntentRevision} onReviseProblem={handleProblemRevision} onReviseOutcome={handleOutcomeRevision} /> : null}
+          {area === "contract" ? <ContractView view={view} busy={busy} latestJob={jobsQuery.data?.at(-1) ?? null} proposalProvider={proposalProvider} onProposalProviderChange={setProposalProvider} onGenerate={handleGenerate} onRetryLatest={() => void handleRetryProposal()} onReviseIntent={handleIntentRevision} onReviseProblem={handleProblemRevision} onReviseOutcome={handleOutcomeRevision} /> : null}
           {area === "workbench" ? <WorkbenchView view={view} busy={busy} generationJob={generationJobsQuery.data?.at(-1) ?? null} executionJob={executionJobsQuery.data?.at(-1) ?? null} repairJob={repairJobsQuery.data?.at(-1) ?? null} deliveryBundle={deliveryBundlesQuery.data?.at(-1) ?? null} deliveryArchiveUrl={(bundleId) => deliveryBundleArchiveUrl(projectId, bundleId)} preview={{
             url: (bundleId) => deliveryBundlePreviewUrl(projectId, bundleId),
             policy: feedbackPolicyQuery.data ?? null,
@@ -484,7 +559,7 @@ export function ProjectStudio({ projectId, onExit }: { projectId: string; onExit
             onIterate: (item) => void handleIterateFromFeedback(item),
             onDisposition: handleFeedbackDisposition,
             diff: bundleDiffQuery.data ?? null,
-          }} onExportProduct={() => void handleExportProduct()} onGenerateProduct={() => void handleGenerateProduct()} sourceModel={{ policy: sourceModelPolicyQuery.data ?? null, onGenerate: () => void handleGenerateProduct("model"), onRetry: () => void handleRetryModelSource() }} onExecuteProduct={() => void handleExecuteProduct()} onRepairProduct={() => void handleRepairProduct()} onGenerate={() => handleGenerate("product_theses")} onGenerateWeb={() => handleGenerate("web_generation_contract")} onConfirmWeb={() => {
+          }} onExportProduct={() => void handleExportProduct()} onGenerateProduct={() => void handleGenerateProduct()} onPauseGeneration={async () => { const job = generationJobsQuery.data?.at(-1); if (job) await refreshAfter(() => pauseGenerationJob({ projectId, jobId: job.job_id })); }} onResumeGeneration={async () => { const job = generationJobsQuery.data?.at(-1); if (job) await refreshAfter(async () => { await resumeGenerationJob({ projectId, jobId: job.job_id }); await runGenerationJob({ projectId, jobId: job.job_id }); }); }} onCancelGeneration={async () => { const job = generationJobsQuery.data?.at(-1); if (job) await refreshAfter(() => cancelGenerationJob({ projectId, jobId: job.job_id })); }} onCancelExecution={async () => { const job = executionJobsQuery.data?.at(-1); if (job) await refreshAfter(() => cancelExecutionJob({ projectId, jobId: job.job_id })); }} onRetryExecution={async () => { const job = executionJobsQuery.data?.at(-1); if (job) await refreshAfter(async () => { await retryExecutionJob({ projectId, jobId: job.job_id }); await runExecutionJob({ projectId, jobId: job.job_id }); }); }} sourceModel={{ policy: sourceModelPolicyQuery.data ?? null, onGenerate: () => void handleGenerateProduct("model"), onRetry: () => void handleRetryModelSource() }} onExecuteProduct={() => void handleExecuteProduct()} onRepairProduct={() => void handleRepairProduct()} onGenerate={() => handleGenerate("product_theses")} onGenerateWeb={() => handleGenerate("web_generation_contract")} onConfirmWeb={() => {
             const contract = view.web_generation_contract;
             if (!contract) return;
             void refreshAfter(() => confirmWebGenerationContract({ projectId, contractId: contract.web_generation_contract_id, revision: contract.meta.revision }));

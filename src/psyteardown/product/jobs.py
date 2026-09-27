@@ -28,6 +28,7 @@ from psyteardown.product.models import (
     ProductProposalJob,
     ProductThesis,
     WebProductGenerationContract,
+    PRODUCT_INTENT_MAX_INPUT_CHARS,
 )
 from psyteardown.product.providers import (
     DeterministicFakeProductContractProvider,
@@ -139,6 +140,8 @@ class ProductProposalJobService:
             result_object_id = self._id("intent")
             result_object_ids: tuple[str, ...] = ()
             raw_input = raw_input.strip()
+            if len(raw_input) > PRODUCT_INTENT_MAX_INPUT_CHARS:
+                raise DomainStateError(f"product intent raw input must be at most {PRODUCT_INTENT_MAX_INPUT_CHARS} characters")
         elif kind == "problem_model":
             if raw_input is not None:
                 raise DomainStateError("raw input is only accepted for product intent jobs")

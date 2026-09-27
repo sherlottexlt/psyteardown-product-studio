@@ -348,3 +348,22 @@ def test_workspace_validation_tolerates_real_build_byproducts(tmp_path):
     (workspace / "src" / "extra.ts").write_text("export {};\n", encoding="utf-8")
     with pytest.raises(Exception, match="integrity"):
         validate_generated_workspace(workspace, generated)
+
+
+def test_execution_falls_back_when_default_preview_port_is_busy(tmp_path, monkeypatch):
+    import psyteardown.product.execution as execution_module
+
+    runner = FakeRunner()
+    service, project, generated = build_execution_service(tmp_path, runner=runner)
+    monkeypatch.setattr(execution_module, "_loopback_port_open", lambda port: port == 4173)
+    queued = service.create_job(
+        project_id=project.project_id,
+        generation_job_id=generated.job_id,
+        actor="user",
+        reason="validate with occupied default port",
+    )
+    completed = service.run_job(project.project_id, queued.job_id, actor="worker")
+    assert completed.status == "succeeded"
+    preview_command = next(call for call in runner.calls if "preview" in call)
+    port = int(preview_command[preview_command.index("--port") + 1])
+    assert port != 4173

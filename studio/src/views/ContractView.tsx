@@ -26,6 +26,7 @@ export function ContractView({
   proposalProvider = "deterministic_fake",
   onProposalProviderChange = () => {},
   onGenerate,
+  onRetryLatest,
   onReviseIntent,
   onReviseProblem,
   onReviseOutcome,
@@ -36,6 +37,7 @@ export function ContractView({
   proposalProvider?: "deterministic_fake" | "real";
   onProposalProviderChange?: (provider: "deterministic_fake" | "real") => void;
   onGenerate: (kind: ProposalJobKind) => Promise<void>;
+  onRetryLatest?: () => void;
   onReviseIntent: (draft: EditableProductIntent) => Promise<RevisionWriteResult>;
   onReviseProblem: (draft: EditableProblemModel) => Promise<RevisionWriteResult>;
   onReviseOutcome: (draft: EditableOutcomeContract) => Promise<RevisionWriteResult>;
@@ -76,14 +78,14 @@ export function ContractView({
 
       <section className="proposal-job-panel" aria-label="Product Contract 提案工作流">
         <div>
-          <p className="eyebrow">Deterministic Phase A provider</p>
+          <p className="eyebrow">Product Contract provider</p>
           {!problem && intent.status === "proposed" ? <h2>先确认产品意图</h2> : null}
           {!problem && intent.status === "confirmed" ? <h2>生成可审阅的问题模型提案</h2> : null}
           {problem?.status === "proposed" ? <h2>问题模型等待人类纠正与确认</h2> : null}
           {problem?.status === "confirmed" && !contract ? <h2>生成可审阅的结果契约提案</h2> : null}
           {contract?.status === "proposed" ? <h2>结果契约等待价值边界审查</h2> : null}
           {contract?.status === "confirmed" ? <h2>Product Contract 已形成</h2> : null}
-          <p>{proposalProvider === "real" ? "真实 DeepSeek 会生成可审阅 proposal；模型输出仍不是外部事实或用户结果。" : "默认使用无网络 fake provider 验证 proposal/confirm 工作流；其输出不是外部事实、证据或用户结果。"}</p>
+          <p>{proposalProvider === "real" ? "真实 DeepSeek 会生成可审阅 proposal；模型输出仍不是外部事实或用户结果。" : "默认使用无网络 fake provider 验证 proposal/confirm 工作流；真实 DeepSeek 输出仍必须由你审阅确认，不是外部事实、证据或用户结果。"}</p>
           <label className="inline-control">
             <span>提案 provider</span>
             <select value={proposalProvider} onChange={(event) => onProposalProviderChange(event.target.value as "deterministic_fake" | "real")} disabled={busy}>
@@ -91,7 +93,7 @@ export function ContractView({
               <option value="real">real（DeepSeek）</option>
             </select>
           </label>
-          {latestJob ? <div className="proposal-job-panel__meta"><Badge tone={latestJob.status === "succeeded" ? "good" : latestJob.status === "failed" || latestJob.status === "stale_input" ? "danger" : "warn"}>{statusLabel(latestJob.status)}</Badge><span>{latestJob.kind} · {latestJob.provider}@{latestJob.provider_version} · attempt {latestJob.attempt}</span></div> : null}
+          {latestJob ? <div className="proposal-job-panel__meta"><Badge tone={latestJob.status === "succeeded" ? "good" : latestJob.status === "failed" || latestJob.status === "stale_input" ? "danger" : "warn"}>{statusLabel(latestJob.status)}</Badge><span>{latestJob.kind} · {latestJob.provider}@{latestJob.provider_version} · attempt {latestJob.attempt}</span>{latestJob.status === "failed" || latestJob.status === "stale_input" ? <button className="button button--quiet" type="button" disabled={busy} onClick={onRetryLatest}>{busy ? "正在重试…" : "带着错误重试"}</button> : null}</div> : null}
         </div>
         {!problem && intent.status === "confirmed" ? <button className="button button--primary" disabled={busy} onClick={() => void onGenerate("problem_model")}>{busy ? "正在推进…" : "生成问题模型提案"}</button> : null}
         {problem?.status === "confirmed" && !contract ? <button className="button button--primary" disabled={busy} onClick={() => void onGenerate("outcome_contract")}>{busy ? "正在推进…" : "生成结果契约提案"}</button> : null}

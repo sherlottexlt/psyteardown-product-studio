@@ -132,3 +132,17 @@ def test_checked_in_openapi_document_matches_application_schema():
     schema_path = Path(__file__).parents[2] / "studio" / "openapi.json"
 
     assert json.loads(schema_path.read_text(encoding="utf-8")) == expected
+
+
+def test_projects_can_be_listed_for_workspace_recovery(tmp_path):
+    app = create_app(database_path=tmp_path / "product-studio.sqlite3")
+    with TestClient(app) as client:
+        for name in ("Older project", "Newer project"):
+            response = client.post(
+                "/api/v1/projects",
+                json={"name": name, "collaboration_mode": "managed", "actor": "local-user", "reason": "start", "created_from": []},
+            )
+            assert response.status_code == 201
+        listed = client.get("/api/v1/projects")
+        assert listed.status_code == 200
+        assert {item["name"] for item in listed.json()} == {"Newer project", "Older project"}

@@ -161,6 +161,7 @@ def contract_payload(contract: WebProductGenerationContract) -> dict:
         "app_title": contract.app_title,
         "screens": [item.model_dump(mode="json") for item in contract.screens],
         "tasks": [item.model_dump(mode="json") for item in contract.tasks],
+        "primary_flow_task_ids": list(contract.primary_flow_task_ids),
         "states": [item.model_dump(mode="json") for item in contract.states],
         "content_slots": [item.model_dump(mode="json") for item in contract.content_slots],
         "acceptance_checks": [item.model_dump(mode="json") for item in contract.acceptance_checks],
@@ -188,6 +189,8 @@ DOM protocol (a browser test derived from the contract checks it exactly):
 - Inside its screen section, one <button type="button" data-task-id="TASK_ID"> per task of that screen, labelled in plain words after the task goal.
   Clicking it must simulate the task locally and set the status to one of that screen's state kinds other than "ready" and "loading"
   (a short "loading" in between is allowed). At least one task must reach "success".
+- If primary_flow_task_ids is non-empty, it is the one end-to-end journey a human should run. Keep it visually obvious, show the current next action, and advance
+  data-primary-flow-step from 0 to the completed step count after each matching task is completed. Do not present the journey as unrelated demo buttons.
 - Exactly one status element, always rendered outside the sections: <p role="status" aria-live="polite" data-state-kind="KIND">
   whose text is a short message written for the end user that fulfils the current state's user_visible_behavior.
   The contract fields describe behaviour; never paste them verbatim as UI copy. The initial kind is "ready".
@@ -258,11 +261,14 @@ def check_model_source(files: dict[str, str], contract: WebProductGenerationCont
             reasons.append(reason)
     if not re.search(r"export\s+default\s+function\s+App\b", app):
         reasons.append("src/App.tsx must `export default function App()`")
-    for marker, pattern in (
+    markers = [
         ('role="status"', r"role\s*=\s*['\"]status['\"]"),
         ("data-state-kind", r"data-state-kind\s*="),
         ("data-recovery", r"data-recovery\s*="),
-    ):
+    ]
+    if contract.primary_flow_task_ids:
+        markers.append(("data-primary-flow-step", r"data-primary-flow-step\s*="))
+    for marker, pattern in markers:
         if not re.search(pattern, app):
             reasons.append(f"DOM protocol marker {marker} is missing")
     required = [
@@ -325,6 +331,21 @@ def contract_browser_test(contract: WebProductGenerationContract) -> str:
         "      await expect(status).toHaveAttribute('data-state-kind', 'ready');\n"
         "    }\n"
         "    expect(await seriousViolations(page)).toEqual([]);\n"
+        "  }\n"
+        "  if (contract.primary_flow_task_ids.length) {\n"
+        "    const flow = contract.primary_flow_task_ids;\n"
+        "    const firstTask = contract.tasks.find((item) => item.task_id === flow[0]);\n"
+        "    if (!firstTask) throw new Error('primary flow references an unknown task');\n"
+        "    await page.locator(`[data-screen-link=\"${firstTask.screen_id}\"]`).click();\n"
+        "    await expect(page.locator('[data-primary-flow-step]')).toHaveAttribute('data-primary-flow-step', '0');\n"
+        "    for (let index = 0; index < flow.length; index += 1) {\n"
+        "      const task = contract.tasks.find((item) => item.task_id === flow[index]);\n"
+        "      if (!task) throw new Error('primary flow task is missing');\n"
+        "      await page.locator(`[data-screen-link=\"${task.screen_id}\"]`).click();\n"
+        "      await page.locator(`[data-screen-id=\"${task.screen_id}\"] [data-task-id=\"${task.task_id}\"]`).click();\n"
+        "      await expect(page.locator('[data-primary-flow-step]')).toHaveAttribute('data-primary-flow-step', String(index + 1));\n"
+        "      await expect(status).not.toHaveText(/^\\s*$/);\n"
+        "    }\n"
         "  }\n"
         "  expect([...contract.requiredSlots].filter((slot) => !seenSlots.has(slot))).toEqual([]);\n"
         "  expect(reached.has('success')).toBe(true);\n"

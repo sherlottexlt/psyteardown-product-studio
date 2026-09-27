@@ -48,6 +48,7 @@ from psyteardown.product.models import (
     PreviewFeedback,
     PreviewFeedbackAnchor,
     PREVIEW_FEEDBACK_MAX_TEXT,
+    PRODUCT_INTENT_MAX_INPUT_CHARS,
     GenerationBudget,
     GenerationManifest,
     ModelCallRecord,
@@ -194,6 +195,7 @@ class WebProductGenerationContractProposalRequest(TransportModel):
     app_title: str
     screens: list[WebScreenSpec]
     tasks: list[WebTaskSpec]
+    primary_flow_task_ids: list[str] = Field(default_factory=list, max_length=8)
     states: list[WebStateSpec]
     content_slots: list[WebContentSlot]
     acceptance_checks: list[WebAcceptanceCheck]
@@ -236,6 +238,7 @@ class WebProductGenerationContractResponse(TransportModel):
     app_title: str
     screens: list[WebScreenSpec]
     tasks: list[WebTaskSpec]
+    primary_flow_task_ids: list[str] = Field(default_factory=list, max_length=8)
     states: list[WebStateSpec]
     content_slots: list[WebContentSlot]
     acceptance_checks: list[WebAcceptanceCheck]
@@ -266,7 +269,7 @@ class CreateProposalJobRequest(TransportModel):
     ]
     actor: str = Field(min_length=1)
     reason: str = Field(min_length=1)
-    raw_input: str | None = Field(default=None, min_length=1)
+    raw_input: str | None = Field(default=None, min_length=1, max_length=PRODUCT_INTENT_MAX_INPUT_CHARS)
     feedback_id: str | None = None
     provider: Literal["deterministic_fake", "real"] = "deterministic_fake"
 
@@ -335,6 +338,7 @@ class CreateExecutionJobRequest(TransportModel):
 
 class ExecutionJobActionRequest(TransportModel):
     actor: str = Field(min_length=1)
+    confirm_orphaned: bool = False
 
 
 class RevisionMetaResponse(TransportModel):
@@ -346,6 +350,8 @@ class RevisionMetaResponse(TransportModel):
 
 
 class C1PolicyResponse(TransportModel):
+    trial_state: Literal["paused", "available"]
+    trial_status_message: str
     consent_policy_revision: str
     statement: str
     access_policy: list[str]

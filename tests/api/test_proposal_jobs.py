@@ -363,3 +363,18 @@ def test_web_generation_contract_job_exposes_b2_template_boundary(tmp_path):
         assert generation["data_policy"] == "local_fixture_only"
         assert generation["product_thesis_revision_id"] == exploring["revision_id"]
         assert len(generation["acceptance_checks"]) >= 3
+
+
+def test_raw_input_is_bounded_before_it_is_persisted(tmp_path):
+    app = create_app(database_path=tmp_path / "product-studio.sqlite3")
+    with TestClient(app) as client:
+        project = client.post(
+            "/api/v1/projects",
+            json={"name": "Bounded input", "collaboration_mode": "managed", "actor": "local-user", "reason": "start", "created_from": []},
+        ).json()
+        response = client.post(
+            f"/api/v1/projects/{project['project_id']}/proposal-jobs",
+            json={"kind": "product_intent", "raw_input": "x" * 4001, "actor": "local-user", "reason": "too large"},
+        )
+        assert response.status_code == 422
+        assert client.get(f"/api/v1/projects/{project['project_id']}/proposal-jobs").json() == []

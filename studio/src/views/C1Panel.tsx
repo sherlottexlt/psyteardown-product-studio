@@ -84,7 +84,7 @@ export function C1Panel({
   const [value, setValue] = useState("true");
   const [status, setStatus] = useState<C1ObservationStatus>("observed");
   const [completionCause, setCompletionCause] = useState("");
-  const [reviewer, setReviewer] = useState("named-reviewer");
+  const [reviewer, setReviewer] = useState("");
   const [reviewObservationId, setReviewObservationId] = useState("");
   const [reviewDecision, setReviewDecision] = useState<C1ReviewDecision>("accepted");
   const [reviewLevel, setReviewLevel] = useState<C1EvidenceLevel>("observed");
@@ -126,7 +126,7 @@ export function C1Panel({
     }
   }
 
-  const canStart = plan.status === "confirmed" && deliveryBundle?.contract_is_current && executionJob?.status === "succeeded" && Boolean(contract) && Boolean(policy);
+  const canStart = plan.status === "confirmed" && deliveryBundle?.contract_is_current && executionJob?.status === "succeeded" && Boolean(contract) && policy?.trial_state === "available";
   const completionCauseRequired = status !== "observed" && !completionCause.trim();
   return (
     <section className="panel evidence-section evidence-section--wide c1-panel" aria-labelledby="c1-panel-title">
@@ -136,11 +136,11 @@ export function C1Panel({
       </div>
       <p className="measurement-plan-intro">本地主持、随机参与者 ID、结构化 measure 和具名 reviewer。不会采集屏幕、键鼠、通知、遥测或参与者原始文本；C1 只接受 research_observation，证据上限为 observed。</p>
       {queryError ? <p className="action-error" role="alert">C1 数据读取失败：{queryError.message}</p> : null}
-      {policy ? <div className="c1-policy"><strong>{policy.consent_policy_revision}</strong><span>{policy.statement}</span><small>访问：{policy.access_policy.join("、")} · 保留：{policy.retention_policy}</small></div> : null}
+      {policy ? <div className="c1-policy"><strong>{policy.consent_policy_revision} · {policy.trial_state === "paused" ? "当前暂缓" : "可启动"}</strong><span>{policy.trial_status_message}</span><span>{policy.statement}</span><small>访问：{policy.access_policy.join("、")} · 保留：{policy.retention_policy}</small></div> : null}
       {!envelope ? (
         <div className="c1-actions">
           <button className="button button--primary" disabled={busy || !canStart} onClick={() => deliveryBundle && executionJob && void run(() => startC1Envelope({ projectId, measurementPlanRevisionId: plan.revision_id, deliveryBundleId: deliveryBundle.bundle_id, executionJobRevisionId: deliveryBundle.execution_job_revision_id, webGenerationContractRevisionId: deliveryBundle.web_generation_contract_revision_id }))}>开始本地 C1 试用</button>
-          {!canStart ? <span className="unknown-copy">需要确认的 C2 计划、当前 Web 契约和成功的 B6 交付包。</span> : null}
+          {!canStart ? <span className="unknown-copy">{policy?.trial_state === "paused" ? policy.trial_status_message : "需要确认的 C2 计划、当前 Web 契约和成功的 B6 交付包。"}</span> : null}
         </div>
       ) : (
         <div className="c1-stack">

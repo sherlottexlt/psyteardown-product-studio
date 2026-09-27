@@ -61,6 +61,8 @@ C1_WITHDRAWAL_POLICY = (
 )
 C1_SOURCE_LAYER = "research_observation"
 C1_EVIDENCE_CEILING = MEASUREMENT_LAYER_CEILINGS[C1_SOURCE_LAYER]
+C1_TRIAL_PAUSED_MESSAGE = "C1 真实任务验证当前暂缓；先完成本地工作流风险复核。"
+_C1_REVIEWER_PLACEHOLDERS = frozenset({"named-reviewer", "reviewer", "local-reviewer", "your-name", "填写 reviewer"})
 
 C1ObservationStatus = Literal[
     "observed",
@@ -625,10 +627,12 @@ class ProductC1ObservationService:
 
     def __init__(self, application, delivery_service, repository: C1Repository, *,
                  clock: Callable[[], datetime] | None = None,
-                 id_factory: Callable[[str], str] | None = None):
+                 id_factory: Callable[[str], str] | None = None,
+                 trial_enabled: bool = False):
         self.application = application
         self.delivery_service = delivery_service
         self.repository = repository
+        self.trial_enabled = trial_enabled
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._id_factory = id_factory or (lambda prefix: f"{prefix}-{uuid4().hex}")
 
@@ -648,6 +652,8 @@ class ProductC1ObservationService:
                        delivery_bundle_id: str, execution_job_revision_id: str,
                        web_generation_contract_revision_id: str, host: str,
                        actor: str, reason: str) -> C1TrialEnvelope:
+        if not self.trial_enabled:
+            raise DomainStateError(C1_TRIAL_PAUSED_MESSAGE)
         if not is_named_human_actor(host) or not is_named_human_actor(actor):
             raise DomainStateError("C1 trial envelope requires a named human host")
         view = self.application.get_project_view(project_id)
@@ -832,8 +838,8 @@ class ProductC1ObservationService:
                         evidence_level_after: C1EvidenceLevel, rationale: str,
                         limitations: Iterable[str] = ()) -> C1EvidenceReview:
         envelope = self.get_envelope(project_id, envelope_id)
-        if not is_named_human_actor(reviewer):
-            raise DomainStateError("C1 EvidenceReview requires a named human reviewer")
+        if not is_named_human_actor(reviewer) or reviewer.strip().lower() in _C1_REVIEWER_PLACEHOLDERS:
+            raise DomainStateError("C1 EvidenceReview requires a named human reviewer, not a placeholder")
         if reviewer == envelope.host:
             raise DomainStateError("C1 reviewer must be independent from the trial host")
         ids = tuple(dict.fromkeys(observation_ids))
