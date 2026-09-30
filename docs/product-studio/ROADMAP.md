@@ -1,6 +1,6 @@
 # Product Studio 路线图
 
-- 基线日期：2026-09-26
+- 基线日期：2026-09-30
 - 路线图状态：Phase A 已关闭；Phase B 已关闭（B1–B9 含 B7m 已实现并验证，退出复核完成）；Phase C in progress（C0/C2/C3 已完成；C1 backend/API/UI 已实现，未招募真实参与者）
 - 排序原则：先完成一个可验证的数字产品纵向闭环，再扩展用户类型、基础设施或 realization pack
 
@@ -24,7 +24,7 @@
 |---|---|---|---|
 | Phase A | 上位模型和 Product Studio 壳 | done（A6 首条切片校准完成） | 可从 Web/API 创建项目、形成并纠正确认 Product Contract，旧内核经应用服务复用；四对象字段与人工确认范围已在首条数字产品切片中冻结 |
 | Phase B | 数字产品生成闭环 | done（Exit Review 完成） | 从模糊意图到可运行 Web 产品、自动测试/修复、反馈和导出全链路可演示且可恢复 |
-| Phase C | 真实结果验证 | in progress（C0/C2/C3 已完成；C1 backend/API/UI slice 已实现，未招募真实参与者） | 目标结果有可操作测量，现实观察与 AI/仿真解释严格分层，并能回退产品论点 |
+| Phase C | 真实结果验证 | in progress（C0/C2/C3 已完成；C1 软件侧试用前准备已验证，尚未启动负责人自试/招募参与者） | 目标结果有可操作测量，现实观察与 AI/仿真解释严格分层，并能回退产品论点 |
 | Phase D | 个人交付与企业治理 | planned | 身份、权限、租户、预算、审计与外部系统集成由真实需求驱动并经过验证 |
 | Phase E | Realization Packs | planned | 在数字产品路径验证后，以共享内核增加移动、硬件、服务等独立实现包 |
 
@@ -187,6 +187,16 @@
 
 Phase B 后续仍必须解决的决策：部署级 OS/container 隔离、视觉回归与跨浏览器 Gate、以及真实 provider 的输入保留/模型与工具费用；首个现实问题已由 A6 的 PS-O001 冻结。B3/B4/B5 的本地 workspace、执行和 deterministic repair 只证明受覆盖的软件行为，不替这些执行与现实验证决策提供批准。
 
+### Phase B 退出后的产品化跟进 — V0.2 Decision Brief
+
+- 状态：`prototype tested`；当前不是 MVP，而是从最小可验证原型向最小产品切片演变。
+- 触发：V0.1 只能在当前页面临时记录选项，刷新后丢失，也没有可带走的成果；技术闭环已通过，但核心产品价值仍未验证。
+- 范围：在不引入推荐、评分、账号、云同步或外部数据接入的前提下，增加决定设定、背景/回看时间、个人倾向、下一步核实问题，以及显式 JSON 导出/导入重开。
+- 当前主链路：`setup → compare → brief → export/import`；当前项目的 r10 Web contract 已确认，下一步生成 workspace/B4/B6；已有 r2/r5 B6 不自动覆盖。
+- 退出门槛：用户可独立完成一次近期决定，并留下可重新打开的 Decision Brief；至少再用第二个真实决定验证是否有复用意愿。该门槛不是长期决策质量或市场效果证据。
+- 下一步：若复用信号成立，再把 `decision-brief.v1` 演变为 SQLite-backed `DecisionBrief` aggregate；在此之前不增加复杂基础设施或扩大 C1。
+- 详细记录：[`iterations/2026-09-30-v02-decision-brief.md`](iterations/2026-09-30-v02-decision-brief.md)
+
 ## Phase C：真实结果验证
 
 ### C0 — 真实 provider 接入与端到端链路
@@ -203,7 +213,7 @@ Phase B 后续仍必须解决的决策：部署级 OS/container 隔离、视觉�
 - 状态：`in progress`（Product-side backend/API 与主持面板已实现；未招募、未收集真实参与者）
 - 已有前置：C2 测量计划和 B6 可运行交付版本；Experience 内核有 `OutcomeObservation`/`EvidenceReview` 基础模型，但未接入 Product C2 的 plan/delivery/consent revision。
 - 决策已冻结：本地同意/最小数据/撤回和保留（PS-O022）；Product-side typed intake 与专用存储边界（PS-O023，PS-O010 对长期跨域仍 open）；具名 reviewer 与 source-layer ceiling（PS-O024）。
-- 当前动作：D1/D2/D3 已按本地首批边界冻结；API/backend/host panel 已实现。2026-09-27 暂缓真实参与者/负责人真实体验验证；主链路恢复 Gate 已通过，且 C1 默认暂停门禁已落地。C1.2 门禁与中断 Execution Job 恢复、C1.3 trial lifecycle/retention 已通过回归；保持开关关闭，是否通过显式开关启动由负责人决定。负责人仍可作为首位真实参与者，但 N=1 participant 可做多个真实 task session 时必须按 `participant_n=1, session_k>=1` 记录；重复 session 不等于多个用户，不满足当前 C2 计划的 participant `minimum_n=3`，也不支持泛化效果声明。保持 `c1-local-v1` 同意/撤回边界；任何 evidence-level promotion 仍要求与 host 分离的具名 reviewer。
+- 当前动作：D1/D2/D3 已按本地首批边界冻结；API/backend/host panel、主链路、恢复控制、暂停与生命周期门禁已实现。2026-09-29 追加 Product Usability Gate：C1 envelope 还要求 host 确认已亲自完成核心任务，不能只有 B4/B6 软件通过。首条 fake Web contract、deterministic template 与源码模型提示已改为要求具体的选项对比板、真实输入/内容和用户自己的判断；旧交付包不自动升级，必须重新生成。真实参与者/负责人自试仍未启动，默认开关保持关闭；N=1 仍按 `participant_n=1, session_k>=1` 记录，不满足 C2 `minimum_n=3`，也不支持泛化效果声明。保持 `c1-local-v1` 同意/撤回边界；无独立 reviewer 时观察可保留为未 review，任何 evidence-level promotion 均要求与 host 分离的具名 reviewer。
 - 已冻结/已实现范围：人工主持、随机 participant ID、显式逐次同意、Product-side 手动 C1 observation intake；每条记录 pin C2 MeasurementPlan revision + measure + B6 bundle/execution revision + consent receipt；无自动运行事件采集；具名人工 EvidenceReview 受 source ceiling 门控；撤回按批准政策擦除/排除相关数据。
 - 退出门槛：至少一轮符合已确认 C2 样本计划的可复核任务试用完成；每条观察可追上述 pin；未同意/撤回/缺失/技术失败均有拒绝或非成功路径测试；参与者使用的同意文案和数据处理方式已清楚展示；EvidenceReview 由具名且与 host 分离的人工完成。负责人 N=1 自试可以作为启动性真实观察，但不单独满足 minimum_n=3 的退出门槛。
 

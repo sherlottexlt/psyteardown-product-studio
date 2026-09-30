@@ -6,19 +6,21 @@ domain rules in the browser.
 
 ## Local development
 
-From the repository root, start the API:
+Use two PowerShell windows. From the repository root, start the API:
 
 ```powershell
-psyteardown-studio-api
+python -m uvicorn psyteardown.api.app:app --host 127.0.0.1 --port 8000
 ```
 
-Then start the web workspace:
+Then start the web workspace in the second window:
 
 ```powershell
 cd studio
 npm install
-npm run dev
+npm run dev -- --host 127.0.0.1
 ```
+
+If the package entry point is installed and available on `PATH`, `psyteardown-studio-api` is an equivalent API command. Open `http://127.0.0.1:5173/` after both processes are running.
 
 Vite listens on `127.0.0.1:5173` and proxies `/api` to
 `127.0.0.1:8000`. Set `VITE_API_BASE_URL` only when the API is intentionally
@@ -60,3 +62,16 @@ issues the separate run command. Jobs are advanced by the client, not by a
 resident worker: if the tab closes mid-run the job stays queued and the same
 generate action resumes it. Real model providers, background workers, sandboxed
 product builds and runnable previews remain explicit unavailable states.
+
+## After downloading a delivery bundle
+
+The **workbench preview** is the path for trying the product and submitting feedback. The downloaded ZIP is a standalone delivery artifact. To open its already verified build locally, extract it and serve the `build/` directory; do not double-click `build/index.html`:
+
+```powershell
+Expand-Archive .\<bundle>.zip -DestinationPath .\<bundle>
+Set-Location .\<bundle>\build
+python -m http.server 4174 --bind 127.0.0.1
+# Open http://127.0.0.1:4174/
+```
+
+`source/` is for optional development/rebuild work. It is not a complete `node_modules`-backed workspace, and a standalone build does not send preview feedback back to Product Studio.

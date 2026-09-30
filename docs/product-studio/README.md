@@ -22,8 +22,10 @@
 | 文档 | 用途 | 更新方式 |
 |---|---|---|
 | [`CURRENT_STATE.md`](CURRENT_STATE.md) | 当前能力、缺口、验证基线和最近下一步 | 每个实现批次结束时覆盖更新 |
+| [`OPERATING_GUIDE.md`](OPERATING_GUIDE.md) | 当前本地使用流程、结果来源与边界 | 本地使用流程变化时更新 |
 | [`ROADMAP.md`](ROADMAP.md) | 阶段、工作包、依赖与退出门槛 | 计划或优先级变化时更新 |
 | [`DECISION_REGISTER.md`](DECISION_REGISTER.md) | North Star 决策、原型假设和待决问题的索引 | 决策、试验结果或范围变化时更新 |
+| [`USER_FEEDBACK.md`](USER_FEEDBACK.md) | 实际使用反馈与待共同解决的问题 | 使用中发现问题时追加；讨论后更新状态与证据 |
 | [`EVOLUTION_LOG.md`](EVOLUTION_LOG.md) | 项目级时间线 | 只在末尾追加，不改写历史 |
 | [`architecture/domain-boundaries.md`](architecture/domain-boundaries.md) | Product 上位域与既有研发内核的职责及集成方向 | 边界或跨域写入规则变化时更新 |
 | [`workstreams/phase-a-foundation.md`](workstreams/phase-a-foundation.md) | 当前 Phase A 的实施分解和验收条件 | 工作包推进时更新 |
@@ -58,6 +60,12 @@
 | [`iterations/2026-09-27-product-studio-recovery-and-local-guardrails.md`](iterations/2026-09-27-product-studio-recovery-and-local-guardrails.md) | C1 真实体验验证前的工作区恢复、Job 控制与本地边界补强 | 已关闭；真实参与者验证暂缓 |
 | [`iterations/2026-09-27-c1-trial-pause-and-orphan-recovery.md`](iterations/2026-09-27-c1-trial-pause-and-orphan-recovery.md) | C1 暂停门禁、独立审查与中断 Job 恢复 | 已关闭；真实参与者验证继续暂缓 |
 | [`iterations/2026-09-27-c1-trial-lifecycle-and-retention.md`](iterations/2026-09-27-c1-trial-lifecycle-and-retention.md) | C1.3 trial lifecycle、close/stop 与本地 30 天 retention enforcement | 已关闭；真实参与者验证继续暂缓 |
+| [`iterations/2026-09-28-b4-contract-test-harness-fix.md`](iterations/2026-09-28-b4-contract-test-harness-fix.md) | B4 契约浏览器测试 harness 修复与 B5 unsupported recovery | 确定性回归通过；当前用户项目重跑待负责人启动 |
+| [`iterations/2026-09-27-c1-mainline-and-model-resilience.md`](iterations/2026-09-27-c1-mainline-and-model-resilience.md) | C1 主链路收敛与模型生成韧性补强 | 实现范围已关闭；未启动真实 C1 试用 |
+| [`iterations/2026-09-28-c1-self-test-readiness.md`](iterations/2026-09-28-c1-self-test-readiness.md) | C1 负责人本地自试前就绪复核 | 软件门槛已验证；启动仍由负责人决定 |
+| [`iterations/2026-09-29-product-usability-gate-and-comparison-board.md`](iterations/2026-09-29-product-usability-gate-and-comparison-board.md) | 修正 C1 前置门槛并让首条 Web 原型具备真实对比任务 | 已关闭；旧交付包不变，需重新生成新契约/交付包 |
+| [`iterations/2026-09-29-product-usability-follow-up.md`](iterations/2026-09-29-product-usability-follow-up.md) | 修复稳定契约重提案、双选项独立记录和 r4 本地旅程验收 | 已关闭；r4 仍待人工确认，C1 未启动 |
+| [`iterations/2026-09-30-v02-decision-brief.md`](iterations/2026-09-30-v02-decision-brief.md) | 将对比板推进为可保存、可重开的 Decision Brief | 已关闭；r7 仍待人工确认，C1 未启动 |
 
 后续按需要增加以下内容，而不是预先建立大量空目录：
 
@@ -68,7 +76,53 @@
 
 ## 当前优先级校正
 
-2026-09-27 起，C1 真实参与者/负责人真实体验验证暂缓。暂停现在同时由 API/UI 门禁执行；先处理会直接中断本地使用的约束：项目恢复、未完成 Job 的继续/暂停/取消、原始输入上限和本地预览端口冲突。主链路恢复 Gate、C1.2 门禁回归和 C1.3 lifecycle/retention 回归均已通过；保持 C1 开关关闭，是否解除由负责人明确决定。
+C1 真实参与者/负责人真实体验验证尚未启动。2026-09-29 已补上此前缺失的 Product Usability Gate：C1 除 C2 plan、当前 Web contract、成功 B6 delivery pin 外，还必须由 host 明确确认“已亲自完成核心任务，交互有真实输入/内容和完成结果”；B4/B6 通过本身不再足够。首条 fake Web contract 和 deterministic template 也已改为具体的选项对比板，而不是通用状态演示。保持 C1 开关默认关闭；旧交付包不会自动变化；当前项目已确认同一稳定契约 ID 的 r10 Web contract，下一步是生成 workspace、B4 和 B6。
+
+## 本地启动（第一次使用）
+
+如果要在 Product Studio 里继续预览、提交反馈或重新生成，不是只启动 Vite：需要同时启动 **API** 和 **Web** 两个进程。建议用两个 PowerShell 窗口：
+
+```powershell
+# 窗口 1：在仓库根目录 D:\app\app-mental
+python -m uvicorn psyteardown.api.app:app --host 127.0.0.1 --port 8000
+
+# 窗口 2：
+Set-Location D:\app\app-mental\studio
+npm run dev -- --host 127.0.0.1
+```
+
+然后打开 `http://127.0.0.1:5173/`。窗口 1 如果提示端口 8000 被占用，说明 API 可能已经在运行；可先访问 `http://127.0.0.1:8000/api/v1/health`，返回健康结果后不要再启动第二个 API。若已安装项目命令，也可以把窗口 1 的命令替换为 `psyteardown-studio-api`。
+
+若只想查看已经下载的 ZIP，不需要启动这两个服务，直接按下面“获取交互包后怎么做”操作即可。
+
+## 获取交互包后怎么做（当前本地流程）
+
+这里要区分两个东西：**工作台里的预览**和**下载的交付包**。
+
+- **想继续体验、记录反馈、提出下一轮修改**：不要先解压 ZIP。留在项目的“产品工作台”，在“交付包”出现后直接看上方的预览；体验后在预览下方提交反馈，再用“基于此反馈提出新契约”进入下一轮。
+- **想把当前已验证版本保存下来或发给别人查看**：点击“下载交付包 (.zip)”。这个 ZIP 是交付/审计材料，不是需要双击打开的网页文件。
+
+下载 ZIP 后，按下面步骤在本机打开交互版本：
+
+```powershell
+# 在下载文件所在目录执行；把 <bundle>.zip 换成实际文件名
+Expand-Archive .\<bundle>.zip -DestinationPath .\<bundle>
+Set-Location .\<bundle>\build
+python -m http.server 4174 --bind 127.0.0.1
+```
+
+然后打开 <http://127.0.0.1:4174/>。保持这个 PowerShell 窗口运行，结束时按 `Ctrl+C`。
+
+**不要**直接双击 ZIP、双击 `build/index.html`，也不要用 `file://.../build/index.html` 打开；当前构建使用浏览器模块和相对资源，直接以文件方式打开不是验证过的流程，常见结果是白屏或资源加载失败。
+
+ZIP 中的目录含义：
+
+- `build/`：已经通过 B4 验证的静态交互版本，体验时使用它；
+- `source/`：生成源码，仅在需要开发/重新构建时使用；
+- `verification/`：本次本地构建、预览、浏览器检查的安全摘要和产物；
+- `DELIVERY.md`、`bundle-manifest.json`：来源、hash 和未验证声明。
+
+如果要修改产品，不要直接改下载包后把它当成下一版：回到 Product Studio 预览中提交反馈，确认新 Web 契约，再重新生成、B4 验证并导出新的交付包。下载包本身不会把反馈回传给 Product Studio，也不代表已经部署到公网或达到真实用户验证。
 
 ## 工作包记录的统一口径
 
@@ -78,7 +132,7 @@
 - `verified`、`blocked`、`decision required` 是验收结果、失败边界或待决事项，不是生命周期状态；应放在“验证/遗留项/决策与偏差”小节。
 - `CURRENT_STATE.md` 和 `ROADMAP.md` 是当前状态权威入口；已关闭 iteration 不静默改写，发现旧结论或旧“下一步”时另开纠错记录并在入口处说明。
 - 一个 iteration 记录一个可验证实现批次。继续实现同一工作包时，保留 Active 记录并追加“本批继续实施”；若前一批已经 Closed，则新建带日期的新 iteration，不把新代码倒填进旧历史。
-- 当前（2026-09-26）的统一解释是：Phase B 已 Closed；C0/C2/C3 已 Closed；C1 为 Active，backend/API/UI 已实现。负责人可直接作为首位真实参与者本地自试，无需先做独立非参与者演练；N=1 不满足 C2 当前 minimum_n=3，也不支持泛化结果声明。
+- 当前（2026-09-28）的统一解释是：Phase B 已 Closed；C0/C2/C3 已 Closed；C1 软件侧准备已验证，但真实自试尚未启动，默认开关关闭。负责人可在明确决定并满足项目 pin/同意边界后作为首位参与者，不要求独立非参与者演练；N=1（即使有多个 session）不满足 C2 `minimum_n=3`，也不支持泛化结果声明。
 
 ## 事实与权威来源
 
@@ -95,6 +149,20 @@
 | 项目正在做什么、下一步是什么 | 本目录的状态、路线图和工作记录 |
 
 如果这些来源互相冲突，不要静默选择一个版本：先在实现记录中标出差异，再明确适用范围与后续决策。不能因为旧 ADR 标为 `accepted`，就把它自动升级为新平台约束；也不能因为原型测试通过，就认为产品或架构已获批准。`CURRENT_STATE.md` 只能总结事实，不能把计划写成已实现能力。
+
+## 2026-09-28 使用阻塞修复摘要
+
+本轮先处理影响继续试用的入口和契约问题，验证证据如下：
+
+- **首次提案 provider 可在新建项目时选择**：默认仍是本地 `fake`，也可明确选择 `real（DeepSeek）`；真实 provider 的外发边界在表单中明示。见 `studio/src/views/NewProject.tsx` 与 `studio/src/api/client.ts`。
+- **中文输入的 fake Product Contract / Thesis / Web 提案跟随中文**：fake 仍明确是合成内容，不冒充研究；现有英文 revision 不会被隐式翻译。候选路径不再硬编码为专注场景，而是围绕已确认 Outcome 生成。见 `src/psyteardown/product/providers.py`。
+- **Outcome severity 契约已统一**：prompt 使用运行时允许的 `hard`、`strong_avoidance`、`watch`；旧 `soft` 只在解析边界兼容为 `strong_avoidance`，并补充了契约测试。见 `src/psyteardown/product/contract_model.py` 与 `tests/product/test_contract_model.py`。
+- **“仍未知”已明确为待查问题，而非生成 Gate**：知道答案就补进“有来源的事实”并移除已解决的问题；不知道可以保留，不需要清空未知即可确认问题模型、生成结果契约。见 `studio/src/components/ContractProposalEditors.tsx` 与 `studio/src/views/ContractView.tsx`。
+- **项目可从首页归档/恢复**：这是可逆的列表整理，不是永久删除；永久清理仍需单独定义 transcript、workspace、导出物、WAL/备份的边界。见 `studio/src/views/NewProject.tsx` 与 `src/psyteardown/product/transitions.py`。
+- **“开始”分层已前置说明**：建立项目、预览原型、记录 C1 真实任务观察不再写成同一个开始动作。
+- **B4 model source recovery 已走通**：Gate 可识别 literal-prefix/template-literal 契约 ID；浏览器测试 fixture、primary-flow 起始状态/异步等待和 saved-source child 的测试覆盖已修复。最新 saved-source workspace 的 B4 install/build/preview/browser 四步均成功；使用本地保存回复，没有新增 provider 调用。原失败 workspace/job 与 provider 原始 rejection 均保留。见 `iterations/2026-09-28-b4-contract-test-harness-fix.md`。
+
+本轮不把以下内容误报为已完成：永久删除、把所有历史 revision 自动翻译成中文、以及首条专注切片对个人价值的真实验证。对应状态继续以 `USER_FEEDBACK.md` 和 `CURRENT_STATE.md` 为准。
 
 ## 每个实现批次的维护协议
 

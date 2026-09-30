@@ -126,19 +126,24 @@ AI 默认负责：
 - Product Studio Web 工作空间已支持 Product Contract、Product Thesis 比较、B2 Web 生成契约、受限生成沙箱、真实本地构建/浏览器验证、边界内修复、交付包和可撤回预览反馈（B3–B7）；
 - B7m 提供可选的模型源码生成：模型只接收已确认的 Web 契约，只能写 `src/App.tsx` 与 `src/styles.css`，输出须通过静态门禁和契约派生浏览器测试；完整请求/响应仅保存在本机，不进入交付包；
 - C1 已接入首条人工结果观察链路：本地试用信封、明确同意、随机参与者 ID、结构化任务观察、非成功路径原因、参与者撤回与源记录擦除，以及与 host 分离的逐条人工 EvidenceReview；C1 数据层固定在 `research_observation`，证据等级上限为 `observed`，不会把观察、仿真或自动测试冒充为真实产品结果；
-- 当前 C1 工作台默认仍要求先完成交付包和本地执行验证，再由 host 明确开始试用；当前实现仅支持本地、单参与者、单条 measure review 的最小纵向切片，不代表真实用户研究、统计推断或生产级隐私合规；
+- 当前 C1 工作台默认仍要求先完成交付包和本地执行验证，再由 host 明确确认“已亲自完成核心任务、交互有真实输入/内容和完成结果”后开始试用；B4/B6 不是产品可用性证明。当前实现仅支持本地、单参与者、单条 measure review 的最小纵向切片，不代表真实用户研究、统计推断或生产级隐私合规；
 - 当前任何仿真、渲染和自动测试都不会被当作真实用户或现实世界结果；真实任务观察现已属于 C1，但仍需要后续扩大参与者覆盖、研究设计和现场验证。
 
 ## 本地启动 Product Studio
 
-后端 API 与 Web 工作空间分别启动：
+后端 API 与 Web 工作空间分别启动（使用两个 PowerShell 窗口）：
 
 ```powershell
-psyteardown-studio-api
+# 窗口 1：仓库根目录
+python -m uvicorn psyteardown.api.app:app --host 127.0.0.1 --port 8000
+
+# 窗口 2：
 cd studio
 npm install
-npm run dev
+npm run dev -- --host 127.0.0.1
 ```
+
+如果已经把项目安装成命令行包，窗口 1 也可以使用 `psyteardown-studio-api`。
 
 浏览器打开 `http://127.0.0.1:5173`。当前 Web 壳支持：从一句不完整的话创建项目并生成初始产品意图提案；依次生成问题模型与结果契约提案；逐个纠正并具名确认，形成带 revision、来源与未知项的 Product Contract；生成和比较三条 Product Thesis；由人授权探索/选择；为 exploring/selected thesis 生成并确认 B2 WebProductGenerationContract。提案由持久化 Job 承载，创建立即返回 `job_id`，执行是独立命令，上游变化会标记 stale 而不是提交过期结果，关闭重开后 Job 与已确认状态都能恢复。
 

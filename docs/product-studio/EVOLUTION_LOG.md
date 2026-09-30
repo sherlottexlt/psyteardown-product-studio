@@ -344,3 +344,69 @@
 - InMemory/SQLite C1 repository 增加确定性 retention cleanup；本地 service 初始化及 envelope list/get 前触发，删除到期源记录并保留 envelope 生命周期状态与 content-free audit；不声称有后台 worker 或跨备份擦除。
 - 新增 SQLite/restart/withdrawal/retention 与 close/stop API 回归，以及 C1 Panel 结束原因测试；本批不启动真实参与者，不改变 C2 `minimum_n=3`，不提升 Outcome Evidence。
 - 详细记录：[`C1.3 trial lifecycle and retention enforcement`](iterations/2026-09-27-c1-trial-lifecycle-and-retention.md)
+
+
+## 2026-09-28 — Product Studio 首轮使用反馈登记
+
+- 新增 [`USER_FEEDBACK.md`](USER_FEEDBACK.md)，记录首次讨论中暴露的语言/provider、协作方式、项目删除、流程措辞和切片适配问题，供之后共同复核与排序。
+- 这些条目是待讨论反馈，不代表解决方案已选定；“临时选择对比板”仍是候选体验方向，未记作已创建或已验证项目。后续问题可继续追加。
+
+## 2026-09-28 — C1 负责人自试前的软件就绪复核
+
+- 收口 C1 主链路/模型韧性实现记录；复核默认暂停、同意提示、trial 启动 pin、close/stop、撤回与 retention 的现有代码及测试边界。
+- 确定性 Python 回归 561 passed / 3 skipped，前端 29 passed，production build 成功，Chromium E2E 3 passed。
+- 未启用 `PSYTEARDOWN_C1_TRIAL_ENABLED`、未调用真实 provider、未启动 trial、未创建现实参与者数据（自动化测试使用隔离 fixture）；N=1 与 `minimum_n=3` 证据边界不变。
+- 软件准备已验证；实际开始仍需负责人选择满足条件的项目、审阅 `c1-local-v1` 同意/数据说明并显式决定启动。详见 [就绪复核](iterations/2026-09-28-c1-self-test-readiness.md)。
+
+
+## 2026-09-28 — 记录结果契约 severity schema 不匹配反馈
+
+- 追加 [`PS-U007`](USER_FEEDBACK.md)：OutcomeContract provider prompt 声明的禁止结果 severity (`hard|soft`) 与运行时 schema (`hard|strong_avoidance|watch`) 不一致，可能导致 `provider_schema_invalid`。
+- 暂列为待共同解决的问题；保留失败 Job，不在没有明确请求时反复重试或改动产品契约。
+
+## 2026-09-28 — B7m 静态 Gate 与 B4 契约测试恢复闭环
+
+- 旧 Gate 误拒绝通过 template literal 组合的契约 ID；加受限静态解析，没有执行模型代码。使用原地保存的模型回复本地复核，没有再次调用 provider。
+- contract-derived primary-flow test fixture、状态等待/导航顺序及 saved-source child 的平台文件来源均修复。旧 job、provider 原始 rejection、workspace 与 execution history 保留。
+- 从保存源码创建独立的 `saved_model` generation lineage，renderer=`b7m-workspace-v5`；B4 install/build/preview/browser 四步成功：`execution-job-778d5b56139d450793c7e4adffa8af99`。没有新的模型调用，也不产生现实用户结果证据。
+- 确定性回归：Python 568 passed / 6 skipped / 2 warnings；前端 35 passed；production build 成功。
+- 详细记录：[`iterations/2026-09-28-b4-contract-test-harness-fix.md`](iterations/2026-09-28-b4-contract-test-harness-fix.md)
+
+## 2026-09-29 — 修正 C1 过早就绪判断并让首条 Web 原型具备真实核心任务
+
+- 发现：上一版 C1 readiness 只检查 C2 plan、当前 Web contract 和成功 B6 pin；用户实际拿到的交互包只有通用状态按钮和空 fixture，技术验证通过但不能完成目标产品任务。
+- 修正：C1 start 新增 `product_usability_confirmed` host gate；fake Web contract 改为具体选项对比板，包含两个本地选项、标准/已知信息/顾虑、用户自己的倾向和未知；deterministic renderer、fixture 和 B7m prompt 同步收紧。
+- 边界：已有旧交付包保持不可变；本批不启动 C1，不把新 deterministic fixture、build 或 host 确认当成真实用户结果。
+- 验证：C1/generation/execution Python 31 passed；前端 35 passed；生产 build 成功；新模板 workspace build 成功，contract-derived Playwright/axe 1 passed。
+- 详细记录：[`iterations/2026-09-29-product-usability-gate-and-comparison-board.md`](iterations/2026-09-29-product-usability-gate-and-comparison-board.md)
+
+
+## 2026-09-29 — Product Usability follow-up：稳定重提案与双选项旅程
+
+- 修复已有 singleton Web contract 重提案时错误生成新 aggregate ID 的问题；当前项目生成 `web-contract-391dfa4a03174521a289d42c2b16d0b9.r4` proposed revision，旧 revision 与旧 B6 ZIP 未改写。
+- 修复 deterministic renderer 的全局共享记录字段，改为两个选项各自的名称、标准、已知信息和顾虑，并在记录判断页显示两列摘要、个人倾向和下一步问题。
+- generated workspace 通过 build、contract-derived Playwright/axe，以及双选项独立输入旅程；Python 目标回归 51 passed，前端 36 passed。
+- 不自动确认 r4、不生成新的 B6、不启动 C1；当前仍需负责人审阅并确认 Web contract。详见 [`product-usability-follow-up`](iterations/2026-09-29-product-usability-follow-up.md)。
+
+
+## 2026-09-30 — V0.2 Decision Brief：从实验板到可带走成果
+
+- 重新定位：当前首版不是 MVP，而是最小可验证原型；本轮不增加推荐、评分、账号或云同步，只补一个可带走的 Decision Brief。
+- Web contract 从两屏对比板推进为三屏 setup → compare → brief，新增决定问题、背景、回看时间、下一步核实问题和 save brief task。
+- deterministic renderer 提供 `decision-brief.v1` JSON 导出与导入重开；仍保持无网络、无浏览器持久化存储、无自动上传。
+- 当前项目已生成 `web-contract-391dfa4a03174521a289d42c2b16d0b9.r7` proposed revision；旧 revision 与已有 r2/r5 B6 不变，未生成 r7 对应的新 B6，未启动 C1。
+- 验证：r7 workspace build、contract-derived Playwright/axe、导出/导入恢复 journey 均通过。详见 [`V0.2 Decision Brief`](iterations/2026-09-30-v02-decision-brief.md)。
+
+
+## 2026-09-30 — V0.2 Decision Brief Web contract confirmed
+
+- 负责人在 Product Studio 确认了同一稳定契约 ID 的 `web-contract-391dfa4a03174521a289d42c2b16d0b9.r10`，确认记录为 `local-user`。
+- r10 已包含三个页面：`设定这次决定`、`选项对比`、`决策简报`；旧 r2/r5 B6 保持不变，r10 workspace/B4/B6 尚未生成。
+- Workbench 现在直接展示 proposed/confirmed contract 的页面明细和任务，不再只显示“页面 / 任务”数量。
+
+
+## 2026-09-30 — 修复 workspace 结果选择与前端主链路污染
+
+- 复核发现 r10 的 deterministic template generation job `generation-job-e6aebe9f43d3482e8d5c0484a806fdd5` 已 succeeded；界面却用最后创建的两个 `model_source/stale_input` Job 覆盖当前结果，导致用户误以为“生成 workspace 失败”。
+- Project Studio 现在按当前 Web contract revision 选择 Job：优先运行中的 Job，其次当前契约成功的 deterministic template；历史模型失败不再遮蔽可用 workspace。执行/修复 Job 同样按选中的 generation lineage 绑定。
+- Workbench 继续使用单一页面明细卡，不新增顶层导航；前端回归 `37 passed`，生产构建成功。当前下一步是 r10 workspace 的 B4 验证，不是重新生成。

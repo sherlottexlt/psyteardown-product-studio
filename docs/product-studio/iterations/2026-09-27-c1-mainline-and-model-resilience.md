@@ -1,7 +1,7 @@
 # Iteration：C1 主链路收敛与真实模型生成韧性补强
 
 - 日期：2026-09-27
-- 状态：Active
+- 状态：Closed
 - 路线图工作包：C1 / B7m / Product Studio Web shell
 - 类型：Workflow / Contract / UI / Validation
 
@@ -30,3 +30,15 @@
 ## 暂不声称
 
 本批只证明主链路表达、模型失败恢复和确定性 Gate 的软件行为；未重新运行付费真实 provider，也不产生 C1 现实任务结果。下一次真实测试应先使用同一条 primary journey，并只验证该 journey 是否能让负责人完成一个明确小任务。
+
+
+## 收口复核（2026-09-28）
+
+实现范围已完成；本次收口复核未启动真实 C1 试用、未启用 `PSYTEARDOWN_C1_TRIAL_ENABLED`、未调用付费真实 provider，也未创建真实参与者记录（自动化测试仅使用隔离数据）。
+
+- `pytest -q --ignore=tests/product/test_c0_real_provider_e2e.py`：561 passed、3 skipped、2 warnings。
+- `npm test -- --run`：29 passed。
+- `npm run build`：成功，OpenAPI/transport type 生成无待提交差异。
+- `npm run test:e2e`：Chromium 3 passed；覆盖 Product Contract/C2 流程、缺少 B6 时 C1 面板禁用、工作区恢复与 axe 检查，不等于 C1 真实观察。
+
+软件准备退出；剩余下一步属于负责人控制的真实体验验证：选定满足 C1 pin 条件的当前项目，审阅实际展示的 `c1-local-v1` 同意与数据边界，并在明确决定后才启用开关。观察可先保留为未 review；任何 EvidenceReview 等级提升仍要求与 host 分离的具名 reviewer。
