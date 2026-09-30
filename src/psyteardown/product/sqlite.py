@@ -405,6 +405,20 @@ class SQLiteProductRepository:
         ).fetchone()
         return ProductGenerationJob.model_validate_json(row[0]) if row else None
 
+    def get_generation_job_revision(self, job_id: str, revision_id: str) -> ProductGenerationJob | None:
+        row = self._conn.execute(
+            "SELECT job_json FROM product_generation_job_revisions WHERE job_id=? AND revision_id=?",
+            (job_id, revision_id),
+        ).fetchone()
+        return ProductGenerationJob.model_validate_json(row[0]) if row else None
+
+    def get_generation_job_revision(self, job_id: str, revision_id: str) -> ProductGenerationJob | None:
+        row = self._conn.execute(
+            "SELECT job_json FROM product_generation_job_revisions WHERE job_id=? AND revision_id=?",
+            (job_id, revision_id),
+        ).fetchone()
+        return ProductGenerationJob.model_validate_json(row[0]) if row else None
+
     def list_generation_jobs(
         self, *, project_id: str | None = None
     ) -> list[ProductGenerationJob]:

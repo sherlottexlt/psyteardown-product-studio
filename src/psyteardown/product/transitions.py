@@ -58,7 +58,8 @@ def _ensure_new_revision_id(current: SnapshotT, new_revision_id: str) -> None:
 _PROJECT_TRANSITIONS: dict[str, frozenset[str]] = {
     "active": frozenset({"paused", "archived"}),
     "paused": frozenset({"active", "archived"}),
-    "archived": frozenset(),
+    # Archive is a reversible visibility state; it is not data deletion.
+    "archived": frozenset({"active"}),
 }
 
 

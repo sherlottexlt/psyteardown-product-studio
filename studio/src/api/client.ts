@@ -3,6 +3,7 @@ import type {
   CollaborationMode,
   ConfirmRevisionRequest,
   CreateProjectRequest,
+  ChangeProjectStatusRequest,
   DeriveOutcomeMeasurementPlanRequest,
   EditableProductIntent,
   EditableProblemModel,
@@ -96,6 +97,24 @@ export function createProject(input: {
 
 export function listProjects(): Promise<ProductProject[]> {
   return request("/api/v1/projects");
+}
+
+export function changeProjectStatus(input: {
+  projectId: string;
+  expectedRevision: number;
+  toStatus: "active" | "paused" | "archived";
+  reason: string;
+}): Promise<ProductProject> {
+  const body: ChangeProjectStatusRequest = {
+    expected_revision: input.expectedRevision,
+    to_status: input.toStatus,
+    actor: "local-user",
+    reason: input.reason,
+  };
+  return request(`/api/v1/projects/${encodeURIComponent(input.projectId)}/status`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 export function getProject(projectId: string): Promise<ProductProjectView> {
@@ -475,6 +494,26 @@ export function createGenerationJob(input: {
   );
 }
 
+export function createSavedSourceMaterialization(input: {
+  projectId: string;
+  sourceJobId: string;
+}): Promise<ProductGenerationJob> {
+  return request(
+    `/api/v1/projects/${encodeURIComponent(input.projectId)}/generation-jobs/${encodeURIComponent(input.sourceJobId)}/saved-source-materializations`,
+    { method: "POST", body: JSON.stringify({ actor: "local-user" }) },
+  );
+}
+
+export function revalidateSavedModelDraft(input: {
+  projectId: string;
+  jobId: string;
+}): Promise<ProductGenerationJob> {
+  return request(
+    `/api/v1/projects/${encodeURIComponent(input.projectId)}/generation-jobs/${encodeURIComponent(input.jobId)}/revalidations`,
+    { method: "POST", body: JSON.stringify({ actor: "local-user" }) },
+  );
+}
+
 export function retryGenerationJob(input: {
   projectId: string;
   jobId: string;
@@ -759,6 +798,7 @@ export function startC1Envelope(input: {
   deliveryBundleId: string;
   executionJobRevisionId: string;
   webGenerationContractRevisionId: string;
+  productUsabilityConfirmed: boolean;
 }): Promise<import("./types").C1TrialEnvelope> {
   return request(`/api/v1/projects/${encodeURIComponent(input.projectId)}/c1/envelopes`, {
     method: "POST",
@@ -767,6 +807,7 @@ export function startC1Envelope(input: {
       delivery_bundle_id: input.deliveryBundleId,
       execution_job_revision_id: input.executionJobRevisionId,
       web_generation_contract_revision_id: input.webGenerationContractRevisionId,
+      product_usability_confirmed: input.productUsabilityConfirmed,
       host: "local-host",
       actor: "local-host",
       reason: "Started a local C1 observation envelope",

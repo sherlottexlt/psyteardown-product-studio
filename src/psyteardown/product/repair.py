@@ -128,7 +128,7 @@ class DeterministicRepairPlanner:
         # therefore reported at the `run` checkpoint until the step summary is
         # persisted.  Treat both checkpoints as the browser validation phase.
         if context.failure_step in {"run", "browser"} and context.failure_code in {"command_failed", "browser_failed", "axe_failed"}:
-            search = '<p role="status">'
+            search = '<p role="status" data-state-kind='
             if search in raw and 'aria-live="polite"' not in raw:
                 return RepairPlan(
                     "Add a polite live-region announcement to the generated status state.",
@@ -137,7 +137,7 @@ class DeterministicRepairPlanner:
                             path="src/App.tsx",
                             expected_sha256=digest,
                             search=search,
-                            replace='<p role="status" aria-live="polite">',
+                            replace='<p role="status" aria-live="polite" data-state-kind=',
                             rationale="Make status changes discoverable without increasing intervention intensity.",
                         ),
                     ),
@@ -357,6 +357,7 @@ class ProductRepairJobService:
                     status="unsupported",
                     error_code="unsupported_failure",
                     error_summary="No deterministic allowlisted repair is available for this failure.",
+                    final_status="failed",
                 )
             repair_generation = self._materialize_repair_generation(
                 running, generation, manifest, plan, actor=actor, attempt_number=attempt_number
@@ -427,6 +428,14 @@ class ProductRepairJobService:
         job = self.get_job(project_id, job_id)
         if job.status not in {"failed", "stale_input", "budget_exhausted"}:
             raise DomainStateError("only failed repair jobs can be retried")
+        if any(
+            item.status == "unsupported" or item.error_code == "unsupported_failure"
+            for item in job.attempts
+        ):
+            raise DomainStateError(
+                "the deterministic planner has no allowlisted patch for this failure; "
+                "do not retry the same repair job"
+            )
         if job.attempt >= job.budget.max_attempts or job.consumed_cost_units >= job.budget.max_cost_units:
             return self._transition(
                 job,

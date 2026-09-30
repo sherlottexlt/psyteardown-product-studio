@@ -58,6 +58,42 @@ function renderWorkbench(props: Partial<Parameters<typeof WorkbenchView>[0]> = {
 describe("WorkbenchView delivery export", () => {
   afterEach(cleanup);
 
+  it("offers an explicit regeneration action when a Web contract already exists", async () => {
+    const onGenerateWeb = vi.fn();
+    renderWorkbench({ onGenerateWeb });
+    await userEvent.click(screen.getByRole("button", { name: "重新生成 Web 契约提案" }));
+    expect(onGenerateWeb).toHaveBeenCalledOnce();
+  });
+
+  it("shows the proposed page details before a workspace exists", () => {
+    renderWorkbench({
+      view: {
+        ...view,
+        web_generation_contract: {
+          ...view.web_generation_contract,
+          status: "proposed",
+          meta: { revision: 7 },
+          primary_flow_task_ids: ["task-frame"],
+          screens: [
+            { screen_id: "screen-setup", title: "设定这次决定", purpose: "先写清楚决定", task_ids: ["task-frame"], state_ids: [] },
+            { screen_id: "screen-compare", title: "选项对比", purpose: "分别记录两个选项", task_ids: ["task-compare"], state_ids: [] },
+            { screen_id: "screen-brief", title: "决策简报", purpose: "导出并重新打开", task_ids: ["task-save"], state_ids: [] },
+          ],
+          tasks: [
+            { task_id: "task-frame", goal: "写下决定", success_criteria: "决定清楚", screen_id: "screen-setup" },
+            { task_id: "task-compare", goal: "比较选项", success_criteria: "差异可见", screen_id: "screen-compare" },
+            { task_id: "task-save", goal: "导出简报", success_criteria: "文件可重开", screen_id: "screen-brief" },
+          ],
+        },
+      } as unknown as ProductProjectView,
+    });
+    expect(screen.getByText("这就是 r7 会生成的页面")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "设定这次决定" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "选项对比" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "决策简报" })).toBeInTheDocument();
+    expect(screen.getByText("导出简报")).toBeInTheDocument();
+  });
+
   it("offers export only after a succeeded execution", async () => {
     const onExport = renderWorkbench();
     await userEvent.click(screen.getByRole("button", { name: "导出交付包" }));
@@ -70,9 +106,39 @@ describe("WorkbenchView delivery export", () => {
     expect(screen.queryByRole("button", { name: "导出交付包" })).toBeNull();
   });
 
+  it("explains a contract test harness crash without calling it an app-source failure", () => {
+    renderWorkbench({
+      executionJob: {
+        ...executionJob,
+        status: "failed",
+        checkpoint_step: "browser",
+        error_code: "browser_test_harness_failed",
+      } as ProductExecutionJob,
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("平台生成的契约浏览器测试脚本自身异常");
+    expect(screen.getByRole("button", { name: "定位并尝试受限修复" })).toBeInTheDocument();
+  });
+
+  it("stops offering repeated deterministic repair for an unsupported failure", () => {
+    renderWorkbench({
+      executionJob: { ...executionJob, status: "failed", error_code: "browser_test_harness_failed" } as ProductExecutionJob,
+      repairJob: {
+        job_id: "repair-1",
+        execution_job_id: "execution-job-1",
+        status: "failed",
+        budget: { max_cost_units: 2 },
+        attempts: [{ status: "unsupported", error_code: "unsupported_failure", diagnosis: "No deterministic allowlisted repair is known for this failure.", cost_units: 1, patches: [] }],
+      } as never,
+    });
+    expect(screen.queryByRole("button", { name: "定位并尝试受限修复" })).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("原 workspace 源码未被修改");
+    expect(screen.getByRole("status")).toHaveTextContent("不会再重复消耗修复尝试");
+  });
+
   it("shows the matching bundle with download link and unverified claims", () => {
     renderWorkbench({ deliveryBundle: bundle });
     expect(screen.getByRole("link", { name: /下载交付包/ })).toHaveAttribute("href", "/archive/delivery-bundle-1");
+    expect(screen.getByText(/静态 HTTP 服务运行/)).toBeInTheDocument();
     expect(screen.getByText("No real-user evidence.")).toBeInTheDocument();
   });
 
@@ -111,6 +177,76 @@ describe("WorkbenchView delivery export", () => {
     expect(screen.getByText("import of 'axios' is not allowed")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /带上门禁原因重试/ }));
     expect(sourceModel.onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("offers local revalidation of a saved rejected source draft without another provider call", async () => {
+    const failed = {
+      ...generationJob,
+      job_id: "generation-job-rejected",
+      status: "failed",
+      materialization_kind: "model",
+      attempt: 2,
+      budget: { max_attempts: 2, max_bytes: 1000 },
+      model_calls: [
+        { attempt: 1, provider: "deepseek", model: "deepseek-flash", outcome: "failed", duration_seconds: 1, rejection_reasons: [] },
+        { attempt: 2, provider: "deepseek", model: "deepseek-flash", outcome: "rejected", duration_seconds: 1, rejection_reasons: ["screen id was not found by an older gate"] },
+      ],
+    } as unknown as ProductGenerationJob;
+    const onRevalidateSavedDraft = vi.fn();
+    renderWorkbench({
+      generationJob: failed,
+      executionJob: null,
+      sourceModel: {
+        policy: { available: true, provider: "deepseek", model: "deepseek-flash", sent: [], not_sent: [], retention: "local", max_calls_per_job: 2, model_writes: ["src/App.tsx", "src/styles.css"], repair_uses_model: false },
+        onGenerate: vi.fn(),
+        onRetry: vi.fn(),
+        onRevalidateSavedDraft,
+      },
+    });
+
+    expect(screen.queryByRole("button", { name: /带上门禁原因重试/ })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "用已保存草稿重新校验（不调用模型）" }));
+    expect(onRevalidateSavedDraft).toHaveBeenCalledOnce();
+    expect(screen.getByText(/不会再次调用模型/)).toBeInTheDocument();
+  });
+
+  it("offers a fresh saved-source workspace lineage without another provider call", async () => {
+    const source = {
+      ...generationJob,
+      job_id: "generation-job-source",
+      revision_id: "generation-job-source.r14",
+      status: "succeeded",
+      materialization_kind: "model",
+      attempt: 2,
+      consumed_cost_units: 2,
+      budget: { max_attempts: 2, max_bytes: 1000 },
+      model_calls: [{
+        attempt: 2,
+        provider: "deepseek",
+        model: "deepseek-flash",
+        outcome: "rejected",
+        static_gate_revalidated: true,
+        static_gate_version: "b7m-static-gate-v3",
+        duration_seconds: 1,
+        rejection_reasons: ["an older local gate did not understand prefixed template IDs"],
+      }],
+    } as unknown as ProductGenerationJob;
+    const onMaterializeSavedSource = vi.fn();
+    renderWorkbench({
+      generationJob: source,
+      executionJob: null,
+      sourceModel: {
+        policy: { available: true, provider: "deepseek", model: "deepseek-flash", sent: [], not_sent: [], retention: "local", max_calls_per_job: 2, model_writes: ["src/App.tsx", "src/styles.css"], repair_uses_model: false },
+        onGenerate: vi.fn(),
+        onRetry: vi.fn(),
+        onMaterializeSavedSource,
+      },
+    });
+
+    expect(screen.getByText("本地复核通过（provider 原始结果保留）")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "从已验证源码创建新 workspace（不调用模型）" }));
+    expect(onMaterializeSavedSource).toHaveBeenCalledOnce();
+    expect(screen.getByText(/旧 job、workspace 和执行记录保持不变，不调用模型/)).toBeInTheDocument();
   });
 
   it("disables model generation when no source model is configured", () => {

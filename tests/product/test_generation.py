@@ -29,6 +29,15 @@ class SequenceIds:
         return f"{prefix}-{self.counts[prefix]}"
 
 
+class BrokenAriaLiveGenerationService(ProductGenerationJobService):
+    """Test-only broken workspace for exercising the bounded repair planner."""
+
+    def _render_files(self, contract):
+        files = super()._render_files(contract)
+        files["src/App.tsx"] = files["src/App.tsx"].replace(' aria-live="polite"', "", 1)
+        return files
+
+
 def confirmed_generation(application, proposal_jobs):
     project, _, _ = _confirmed_outcome_contract(application, proposal_jobs)
     thesis_job = proposal_jobs.create_job(
@@ -70,11 +79,12 @@ def confirmed_generation(application, proposal_jobs):
     )
 
 
-def build_generation_services(root):
+def build_generation_services(root, *, broken_template=False):
     application, _, proposal_jobs = build_services()
     project, contract = confirmed_generation(application, proposal_jobs)
     generation_repository = InMemoryProductGenerationJobRepository()
-    generation = ProductGenerationJobService(
+    generation_class = BrokenAriaLiveGenerationService if broken_template else ProductGenerationJobService
+    generation = generation_class(
         application,
         generation_repository,
         workspace_root=root,
@@ -110,6 +120,20 @@ def test_confirmed_contract_materializes_bounded_workspace_and_is_idempotent(tmp
     assert (workspace / "src" / "App.tsx").is_file()
     assert (workspace / "generation-manifest.json").is_file()
     assert generation.run_job(project.project_id, queued.job_id, actor="worker") == completed
+
+
+def test_template_materializer_version_invalidates_completed_b3_cache(tmp_path):
+    from psyteardown.product.models import GENERATION_JOB_VERSION
+
+    _, _, generation, project, _ = build_generation_services(tmp_path / "workspaces")
+    queued = generation.create_job(
+        project_id=project.project_id, actor="user-li", reason="materialize current renderer"
+    )
+    assert GENERATION_JOB_VERSION == "b3-v2"
+    assert queued.provider_version == GENERATION_JOB_VERSION
+    assert generation.create_job(
+        project_id=project.project_id, actor="user-li", reason="same current renderer"
+    ).job_id == queued.job_id
 
 
 def test_generation_stale_input_does_not_materialize_workspace(tmp_path):

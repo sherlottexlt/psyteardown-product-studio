@@ -74,6 +74,29 @@ async def create_generation_job(
     )
 
 
+@router.post(
+    "/{project_id}/generation-jobs/{job_id}/saved-source-materializations",
+    response_model=ProductGenerationJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=ERROR_RESPONSES,
+)
+async def create_saved_source_materialization(
+    project_id: str,
+    job_id: str,
+    request: GenerationJobActionRequest,
+    service: GenerationService,
+) -> ProductGenerationJobResponse:
+    """Create an independent B3 child job from a saved, locally revalidated source."""
+    return ProductGenerationJobResponse.from_domain(
+        service.create_saved_source_job(
+            project_id=project_id,
+            source_job_id=job_id,
+            actor=request.actor,
+            reason="Create a new workspace lineage from locally saved model source without another provider call",
+        )
+    )
+
+
 @router.get(
     "/{project_id}/generation-jobs/{job_id}/model-calls/{attempt}",
     response_model=ModelCallTranscriptResponse,
@@ -95,6 +118,9 @@ async def get_model_call_transcript(
         prompt=payload["prompt"],
         response=payload.get("response"),
         gate=payload.get("gate"),
+        provider_gate=payload.get("provider_gate"),
+        gate_revalidations=payload.get("gate_revalidations", []),
+        static_gate_version=payload.get("static_gate_version"),
         error=payload.get("error"),
     )
 
@@ -185,6 +211,25 @@ async def cancel_generation_job(
 ) -> ProductGenerationJobResponse:
     return ProductGenerationJobResponse.from_domain(
         service.cancel_job(project_id, job_id, actor=request.actor)
+    )
+
+
+@router.post(
+    "/{project_id}/generation-jobs/{job_id}/revalidations",
+    response_model=ProductGenerationJobResponse,
+    responses=ERROR_RESPONSES,
+)
+async def revalidate_saved_model_draft(
+    project_id: str,
+    job_id: str,
+    request: GenerationJobActionRequest,
+    service: GenerationService,
+) -> ProductGenerationJobResponse:
+    """Re-run the local static gate on a saved rejected draft without calling a provider."""
+    return ProductGenerationJobResponse.from_domain(
+        service.revalidate_saved_model_draft(
+            project_id, job_id, actor=request.actor
+        )
     )
 
 

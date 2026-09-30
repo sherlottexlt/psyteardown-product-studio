@@ -436,6 +436,30 @@ def test_paused_project_blocks_child_writes_until_resumed(service):
     assert resumed.status == "active"
 
 
+def test_archived_project_can_be_restored(service):
+    project = create_project(service)
+    archived = service.change_project_status(
+        ChangeProductProjectStatus(
+            project_id=project.project_id,
+            expected_revision=project.meta.revision,
+            to_status="archived",
+            actor="user-li",
+            reason="hide abandoned project",
+        )
+    )
+    restored = service.change_project_status(
+        ChangeProductProjectStatus(
+            project_id=project.project_id,
+            expected_revision=archived.meta.revision,
+            to_status="active",
+            actor="user-li",
+            reason="restore project",
+        )
+    )
+    assert archived.status == "archived"
+    assert restored.status == "active"
+
+
 def test_repository_command_is_atomic_when_event_insert_fails(product_repository):
     intent = ProductIntent(
         intent_id="atomic-intent",

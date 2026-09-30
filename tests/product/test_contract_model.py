@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 
 from psyteardown.product.contract_model import (
+    OUTCOME_SYSTEM,
     build_intent_prompt,
     parse_intent_reply,
+    parse_outcome_reply,
 )
 
 
@@ -53,3 +55,57 @@ def test_thesis_prompt_freezes_realization_mode_allowlist():
 
     assert '"software", "hardware", "service", "content", "process", "hybrid"' in THESIS_SYSTEM
     assert 'Do not invent values' in THESIS_SYSTEM
+
+
+def test_outcome_prompt_uses_runtime_severity_enum():
+    assert '"hard|strong_avoidance|watch"' in OUTCOME_SYSTEM
+    assert 'do not use "soft"' in OUTCOME_SYSTEM
+
+
+def test_parse_outcome_reply_accepts_runtime_severities(proposed_intent, proposed_problem):
+    text = json.dumps({
+        "target_segments": ["independent knowledge workers"],
+        "applicable_contexts": ["local work"],
+        "target_outcomes": [],
+        "success_indicators": [],
+        "prohibited_outcomes": [
+            {
+                "prohibited_outcome_id": "no-surveillance",
+                "description": "No hidden monitoring",
+                "severity": "strong_avoidance",
+                "detection_method": "Human review",
+                "response": "Stop and reframe",
+            },
+            {
+                "prohibited_outcome_id": "no-pressure",
+                "description": "No pressure increase",
+                "severity": "watch",
+                "detection_method": "User report",
+                "response": "Pause",
+            },
+        ],
+        "prohibited_outcomes_reviewed": False,
+        "resource_boundary": {"time_budget": "one day"},
+        "stop_conditions": [],
+        "minimum_delivery_maturity": "runnable_prototype",
+        "required_real_world_evidence": [],
+    })
+    result = parse_outcome_reply(text, job_id="outcome-job", intent=proposed_intent, problem=proposed_problem)
+    assert not isinstance(result, list)
+    assert [item.severity for item in result.prohibited_outcomes] == ["strong_avoidance", "watch"]
+
+
+def test_parse_outcome_reply_keeps_legacy_soft_as_strong_avoidance(proposed_intent, proposed_problem):
+    text = json.dumps({
+        "prohibited_outcomes": [{
+            "prohibited_outcome_id": "legacy",
+            "description": "Legacy label",
+            "severity": "soft",
+            "detection_method": "Human review",
+            "response": "Pause",
+        }],
+        "resource_boundary": {"time_budget": "one day"},
+    })
+    result = parse_outcome_reply(text, job_id="legacy-job", intent=proposed_intent, problem=proposed_problem)
+    assert not isinstance(result, list)
+    assert result.prohibited_outcomes[0].severity == "strong_avoidance"

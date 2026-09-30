@@ -66,6 +66,7 @@ export interface ProductProjectView
 
 export type ApiErrorBody = Schemas["ApiErrorResponse"];
 export type CreateProjectRequest = Schemas["CreateProjectRequest"];
+export type ChangeProjectStatusRequest = Schemas["ChangeProjectStatusRequest"];
 export type SubmitProductIntentRequest = Schemas["SubmitProductIntentRequest"];
 export type ConfirmRevisionRequest = Schemas["ConfirmRevisionRequest"];
 export type TransitionProductThesisRequest = Schemas["TransitionProductThesisRequest"];

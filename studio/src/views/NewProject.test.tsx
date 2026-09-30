@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createProject, createProposalJob, listProjects, runProposalJob } from "../api/client";
 import { NewProject } from "./NewProject";
 
@@ -12,6 +12,7 @@ vi.mock("../api/client", () => ({
 }));
 
 describe("NewProject", () => {
+  afterEach(() => cleanup());
   beforeEach(() => { vi.clearAllMocks(); vi.mocked(listProjects).mockResolvedValue([]); });
 
   it("persists raw input through a proposal job before opening the project", async () => {
@@ -51,4 +52,25 @@ describe("NewProject", () => {
       createProposalJobMock.mock.invocationCallOrder[0]!,
     );
   });
+
+  it("lets the first proposal explicitly use the real provider", async () => {
+    vi.mocked(createProject).mockResolvedValue({ project_id: "project-real" } as never);
+    vi.mocked(createProposalJob).mockResolvedValue({ job_id: "job-real", status: "queued" } as never);
+    vi.mocked(runProposalJob).mockResolvedValue({ job_id: "job-real", status: "succeeded" } as never);
+    const user = userEvent.setup();
+    render(<NewProject lastProjectId={null} onCreated={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("项目名称"), "本地对比板");
+    await user.type(screen.getByLabelText("用一句不完整的话描述你想改变的现实"), "我希望比较两个选择时更快看出差异");
+    await user.selectOptions(screen.getByLabelText("首次提案 provider"), "real");
+    await user.click(screen.getByRole("button", { name: /建立产品工作空间/ }));
+
+    await waitFor(() => expect(createProposalJob).toHaveBeenCalledWith({
+      projectId: "project-real",
+      kind: "product_intent",
+      rawInput: "我希望比较两个选择时更快看出差异",
+      provider: "real",
+    }));
+  });
+
 });

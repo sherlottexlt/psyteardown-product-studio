@@ -54,10 +54,16 @@ export function ProblemModelEditor({
   const valid = splitLines(facts).length > 0 && splitLines(explanations).length >= 2;
   return (
     <form className="intent-editor" onSubmit={(event) => void submit(event)}>
-      <header><div><p className="eyebrow">Correct proposal</p><h3 ref={titleRef} tabIndex={-1}>纠正问题模型</h3><p>事实应只保留你能确认的陈述；竞争解释不会因出现在这里就变成事实。</p></div><span className="revision">基于 r{problem.meta.revision}</span></header>
+      <header><div><p className="eyebrow">Correct proposal</p><h3 ref={titleRef} tabIndex={-1}>纠正问题模型</h3><p>事实只写你能确认的内容；竞争解释不是事实。未知是待查问题，不是必须答完的问卷。</p></div><span className="revision">基于 r{problem.meta.revision}</span></header>
+      <aside className="recovery-banner" role="note" aria-label="如何处理仍未知的问题">
+        <div>
+          <strong>知道答案：把它写进“有来源的事实”，并从“仍未知”移除已解决的问题。</strong>
+          <small>暂时不知道：保留问题即可，不要猜。你不需要清空“仍未知”才能确认问题模型或生成结果契约；结果契约提案失败也不是因为未知没有答完。</small>
+        </div>
+      </aside>
       <div className="intent-editor__grid">
-        <label>有来源的事实<textarea rows={6} value={facts} onChange={(event) => setFacts(event.target.value)} /><small>每行一项；保存后标记为本次用户纠正的来源</small></label>
-        <label>仍未知<textarea rows={6} value={unknowns} onChange={(event) => setUnknowns(event.target.value)} /><small>每行一个问题</small></label>
+        <label>有来源的事实<textarea rows={6} value={facts} onChange={(event) => setFacts(event.target.value)} /><small>每行一项；只写你亲自知道/观察到的答案，保存后标记为本次用户纠正的来源</small></label>
+        <label>仍未知<textarea rows={6} value={unknowns} onChange={(event) => setUnknowns(event.target.value)} /><small>每行一个尚未解决、可能影响产品方向的问题；不知道答案就保留</small></label>
         <label className="intent-editor__wide">竞争性解释<textarea rows={6} value={explanations} onChange={(event) => setExplanations(event.target.value)} /><small>确认至少保留两个真实不同、可被证伪的解释</small></label>
       </div>
       <ResultMessage result={result} />

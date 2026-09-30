@@ -207,7 +207,7 @@ Output valid JSON matching this schema:
   "applicable_contexts": ["string"],
   "target_outcomes": [{"outcome_id": "id", "description": "string", "indicator_ids": ["indicator-id"]}],
   "success_indicators": [{"indicator_id": "id", "operational_definition": "string", "observation_method": "string", "desired_direction": "string", "threshold_or_target": "string", "required_evidence": "string"}],
-  "prohibited_outcomes": [{"prohibited_outcome_id": "id", "description": "string", "severity": "hard|soft", "detection_method": "string", "response": "string"}],
+  "prohibited_outcomes": [{"prohibited_outcome_id": "id", "description": "string", "severity": "hard|strong_avoidance|watch", "detection_method": "string", "response": "string"}],
   "prohibited_outcomes_reviewed": false,
    "resource_boundary": {"time_budget": "string or null", "economic_budget": "string or null", "data_boundary": "string or null", "maintenance_budget": "string or null", "explicit_unknowns": ["string"]},
    "stop_conditions": [{"condition_id": "id", "condition": "string", "action": "pause|stop|reframe|escalate"}],
@@ -219,6 +219,7 @@ Rules:
 - success_indicators must be observable and measurable
 - required_evidence should be "real_user_observation" for outcome claims
 - prohibited_outcomes must include explicit_non_goals from Intent
+- severity must be exactly one of "hard", "strong_avoidance", or "watch"; do not use "soft"
 - Leave threshold_or_target as "Must be set by a human before confirmation" if not specified
 - minimum_delivery_maturity for first slice is "runnable_prototype"
 """
@@ -411,6 +412,18 @@ def build_problem_prompt(intent: ProductIntent) -> str:
 Generate a ProblemModel JSON that explores this problem space with at least 2 competing explanations."""
 
 
+def _normalize_prohibited_outcome_severity(value: object) -> str:
+    """Normalize the one legacy label emitted by older C0 prompts.
+
+    The domain model deliberately exposes the more precise three-level vocabulary.
+    Accepting the old ``soft`` spelling at the parser boundary lets an already
+    queued provider response be reviewed and retried without weakening the stored
+    contract schema.
+    """
+    normalized = str(value or "hard").strip().lower()
+    return "strong_avoidance" if normalized == "soft" else normalized
+
+
 def parse_outcome_reply(
     text: str, *, job_id: str, intent: ProductIntent, problem: ProblemModel
 ) -> OutcomeContractProposal | list[str]:
@@ -464,7 +477,7 @@ def parse_outcome_reply(
                 ProhibitedOutcome(
                     prohibited_outcome_id=str(p["prohibited_outcome_id"]),
                     description=str(p["description"]),
-                    severity=str(p.get("severity", "hard")),
+                    severity=_normalize_prohibited_outcome_severity(p.get("severity", "hard")),
                     detection_method=str(p.get("detection_method", "")),
                     response=str(p.get("response", "")),
                 )

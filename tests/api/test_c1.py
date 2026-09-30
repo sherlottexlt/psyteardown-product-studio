@@ -122,6 +122,27 @@ def test_c1_domain_requires_explicit_consent_and_enforces_source_ceiling():
     assert C1_WITHDRAWAL_POLICY
 
 
+def test_c1_rejects_software_only_readiness_without_product_usability_confirmation(tmp_path):
+    database = tmp_path / "product-studio.sqlite3"
+    with TestClient(create_app(database_path=database, c1_trial_enabled=True)) as client:
+        project_id, plan, bundle, contract = _c1_setup(client)
+        response = client.post(
+            f"/api/v1/projects/{project_id}/c1/envelopes",
+            json={
+                "measurement_plan_revision_id": plan["revision_id"],
+                "delivery_bundle_id": bundle["bundle_id"],
+                "execution_job_revision_id": bundle["execution_job_revision_id"],
+                "web_generation_contract_revision_id": contract["revision_id"],
+                "product_usability_confirmed": False,
+                "host": "host-li",
+                "actor": "research-lead",
+                "reason": "do not start a software-only trial",
+            },
+        )
+        assert response.status_code == 409, response.text
+        assert "B4/B6 software verification is not enough" in response.json()["error"]["message"]
+
+
 def test_c1_api_pins_plan_and_delivery_then_withdraws_source_rows(tmp_path):
     database = tmp_path / "product.sqlite3"
     with TestClient(create_app(database_path=database, c1_trial_enabled=True)) as client:
@@ -133,6 +154,7 @@ def test_c1_api_pins_plan_and_delivery_then_withdraws_source_rows(tmp_path):
                 "delivery_bundle_id": bundle["bundle_id"],
                 "execution_job_revision_id": bundle["execution_job_revision_id"],
                 "web_generation_contract_revision_id": contract["revision_id"],
+                "product_usability_confirmed": True,
                 "host": "host-li",
                 "actor": "research-lead",
                 "reason": "start consented local trial",
@@ -246,7 +268,7 @@ def test_c1_rejects_placeholder_reviewer(tmp_path):
         project_id, plan, bundle, contract = _c1_setup(client)
         envelope = client.post(
             f"/api/v1/projects/{project_id}/c1/envelopes",
-            json={"measurement_plan_revision_id": plan["revision_id"], "delivery_bundle_id": bundle["bundle_id"], "execution_job_revision_id": bundle["execution_job_revision_id"], "web_generation_contract_revision_id": contract["revision_id"], "host": "host-li", "actor": "host-li", "reason": "start"},
+            json={"measurement_plan_revision_id": plan["revision_id"], "delivery_bundle_id": bundle["bundle_id"], "execution_job_revision_id": bundle["execution_job_revision_id"], "web_generation_contract_revision_id": contract["revision_id"], "product_usability_confirmed": True, "host": "host-li", "actor": "host-li", "reason": "start"},
         ).json()
         enrolled = client.post(
             f"/api/v1/projects/{project_id}/c1/envelopes/{envelope['envelope_id']}/participants",
@@ -279,6 +301,7 @@ def test_c1_envelope_end_blocks_new_presentations_and_observations(tmp_path, act
                 "delivery_bundle_id": bundle["bundle_id"],
                 "execution_job_revision_id": bundle["execution_job_revision_id"],
                 "web_generation_contract_revision_id": contract["revision_id"],
+                "product_usability_confirmed": True,
                 "host": "host-li",
                 "actor": "host-li",
                 "reason": "start",
@@ -330,6 +353,7 @@ def test_c1_sqlite_retention_cleanup_runs_on_restart_after_30_days(tmp_path):
                 "delivery_bundle_id": bundle["bundle_id"],
                 "execution_job_revision_id": bundle["execution_job_revision_id"],
                 "web_generation_contract_revision_id": contract["revision_id"],
+                "product_usability_confirmed": True,
                 "host": "host-li",
                 "actor": "host-li",
                 "reason": "start",

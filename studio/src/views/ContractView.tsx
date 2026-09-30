@@ -147,7 +147,11 @@ export function ContractView({
             <div className="model-columns">
               <div><h3>有来源的事实</h3><ListOrUnknown items={problem.facts.map((item) => item.statement)} /></div>
               <div><h3>竞争性解释</h3><ListOrUnknown items={problem.competing_explanations.map((item) => item.statement)} /></div>
-              <div><h3>仍未知</h3><ListOrUnknown items={problem.unknowns.map((item) => item.question)} /></div>
+              <div>
+                <h3>仍未知</h3>
+                <ListOrUnknown items={problem.unknowns.map((item) => item.question)} />
+                <p className="unknown-copy">这些是可能改变产品方向、但目前还不知道答案的问题；不必全部回答，也不会阻止生成结果契约。知道答案时可在“纠正问题模型”里补充为事实。</p>
+              </div>
             </div>
           ) : <p className="unknown-copy">问题模型尚未形成。当前意图不会被包装成已经理解的问题。</p>}
         </section>

@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 
@@ -158,6 +159,58 @@ def test_static_gate_checks_css_contract_ids_and_reply_shape(tmp_path):
     assert parse_source_reply("```tsx\nA\n```")[1] == ["reply must contain exactly one css code block for src/styles.css"]
 
 
+def test_static_gate_resolves_prefixed_template_literal_contract_ids(tmp_path):
+    _, _, _, contract = _services(tmp_path, None)
+    prefix = contract.screens[0].screen_id.removesuffix("-setup-screen")
+    identifiers = [
+        *(item.screen_id for item in contract.screens),
+        *(item.task_id for item in contract.tasks),
+        *(item.slot_id for item in contract.content_slots if item.required),
+    ]
+    names = {identifier: f"ID_{index}" for index, identifier in enumerate(identifiers)}
+    declarations = [f'const P = "{prefix}";']
+    content_slot_ids = {item.slot_id for item in contract.content_slots if item.required}
+    for identifier, name in names.items():
+        assert identifier.startswith(prefix)
+        if identifier not in content_slot_ids:
+            declarations.append(f"const {name} = `${{P}}{identifier[len(prefix):]}`;")
+
+    screen_sections = []
+    nav_buttons = []
+    for screen in contract.screens:
+        screen_name = names[screen.screen_id]
+        nav_buttons.append(f'<button data-screen-link={{{screen_name}}}>Open</button>')
+        task_buttons = "".join(
+            f'<button data-task-id={{{names[task_id]}}}>Task</button>'
+            for task_id in screen.task_ids
+        )
+        screen_sections.append(
+            f'<section data-screen-id={{{screen_name}}}>{task_buttons}</section>'
+        )
+    slot_nodes = "".join(
+        f'<p data-slot-id={{`${{P}}{slot.slot_id[len(prefix):]}`}}>Fallback content</p>'
+        for slot in contract.content_slots
+        if slot.required
+    )
+    app = "\n".join([
+        *declarations,
+        "export default function App() {",
+        "  return <main>",
+        f"    <nav>{''.join(nav_buttons)}</nav>",
+        *[
+            f"    {section[:-10]}{slot_nodes}</section>" if index == 0 else f"    {section}"
+            for index, section in enumerate(screen_sections)
+        ],
+        '    <p role="status" aria-live="polite" data-state-kind="ready">Ready</p>',
+        '    <button data-recovery="true">Recover</button>',
+        '    <div data-primary-flow-step="0" />',
+        "  </main>;",
+        "}",
+    ])
+    reasons = check_model_source({"src/App.tsx": app, "src/styles.css": ""}, contract)
+    assert not [reason for reason in reasons if "id " in reason and "from the contract is missing" in reason]
+
+
 def test_source_reply_requires_only_ordered_code_blocks():
     accepted = parse_source_reply("\n```tsx\napp\n```\n\n```css\ncss\n```\n")
     assert accepted == ({"src/App.tsx": "app\n", "src/styles.css": "css\n"}, [])
@@ -179,6 +232,23 @@ def test_contract_browser_test_covers_every_screen_task_and_required_slot(tmp_pa
     ]:
         assert f'"{identifier}"' in spec
     assert "reached.has('success')" in spec and "AxeBuilder" in spec
+    # The primary journey must start from the untouched ready/step-0 state;
+    # per-screen checks also click tasks and advance the same app state.
+    assert spec.index("if (contract.primary_flow_task_ids.length)") < spec.index("for (const screen of contract.screens)")
+    payload_match = re.search(r"const contract = (\{[\s\S]*?\}) as const;", spec)
+    assert payload_match is not None
+    payload = json.loads(payload_match.group(1))
+    assert payload["primary_flow_task_ids"] == list(contract.primary_flow_task_ids)
+    primary_flow_section = spec.index("const tracker = page.locator('[data-primary-flow-step]')")
+    screen_sweep_section = spec.index("for (const screen of contract.screens)")
+    assert primary_flow_section < screen_sweep_section
+    assert "const tracker = page.locator('[data-primary-flow-step]')" in spec
+    assert "await expect(status).toHaveAttribute('data-state-kind', new RegExp(`^(${taskScreen.outcomes.join('|')})$`));" in spec
+    assert "await page.locator(`[data-screen-link=\"${firstTask.screen_id}\"]`).click();\n      await expect(tracker)" in spec
+    assert payload["tasks"] == [
+        {"task_id": item.task_id, "screen_id": item.screen_id}
+        for item in contract.tasks
+    ]
 
 
 def test_deepseek_source_model_sends_bounded_chat_request_and_usage(monkeypatch):

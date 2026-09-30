@@ -992,7 +992,7 @@ class ProductProposalJob(FrozenModel):
 # an isolated workspace.  The latter must therefore carry its own budget,
 # sandbox declaration, checkpoint and artifact manifest.
 GENERATION_JOB_PROVIDER = "deterministic_template"
-GENERATION_JOB_VERSION = "b3-v1"
+GENERATION_JOB_VERSION = "b3-v2"
 GENERATION_WORKSPACE_RELATIVE_ROOT = "workspaces"
 GENERATION_DEFAULT_MAX_ATTEMPTS = 1
 GENERATION_DEFAULT_MAX_FILES = 64
@@ -1005,6 +1005,8 @@ GENERATION_DEFAULT_MAX_COST_UNITS = 1
 # a model job may spend at most two, so a rejected first draft gets one retry.
 GENERATION_MODEL_PROVIDER = "model_source"
 GENERATION_MODEL_VERSION = "b7m-v1"
+GENERATION_SAVED_SOURCE_PROVIDER = "saved_model_revalidation"
+GENERATION_SAVED_SOURCE_VERSION = "b7m-saved-source-v1"
 GENERATION_MODEL_MAX_CALLS = 2
 GENERATION_MODEL_MAX_DURATION_SECONDS = 300
 GENERATION_MODEL_SOURCE_PATHS = ("src/App.tsx", "src/styles.css")
@@ -1071,6 +1073,10 @@ class ModelCallRecord(FrozenModel):
     output_tokens: int | None = Field(default=None, ge=0)
     duration_seconds: float = Field(ge=0)
     rejection_reasons: tuple[Identifier, ...] = Field(default=(), max_length=20)
+    # Preserve provider-call outcome as immutable provenance. A later local
+    # gate correction is recorded separately and never relabels the provider.
+    static_gate_revalidated: bool = False
+    static_gate_version: Identifier | None = None
     sent_object_types: tuple[Literal["web_generation_contract"], ...] = ("web_generation_contract",)
 
 
@@ -1131,7 +1137,7 @@ class ProductGenerationJob(FrozenModel):
         "budget_exhausted",
         "cancelled",
     ] = "queued"
-    provider: Literal["deterministic_template", "deterministic_repair", "model_source"] = GENERATION_JOB_PROVIDER
+    provider: Literal["deterministic_template", "deterministic_repair", "model_source", "saved_model_revalidation"] = GENERATION_JOB_PROVIDER
     provider_version: Identifier = GENERATION_JOB_VERSION
     input_dependencies: tuple[DependencyRef, ...] = Field(min_length=1, max_length=1)
     web_generation_contract_revision_id: Identifier
@@ -1140,9 +1146,13 @@ class ProductGenerationJob(FrozenModel):
     budget: GenerationBudget = Field(default_factory=GenerationBudget)
     sandbox: GenerationSandboxPolicy = Field(default_factory=GenerationSandboxPolicy)
     fingerprint: Identifier
-    materialization_kind: Literal["template", "repair", "model"] = "template"
+    materialization_kind: Literal["template", "repair", "model", "saved_model"] = "template"
     parent_generation_job_id: Identifier | None = None
     repair_job_id: Identifier | None = None
+    source_generation_job_id: Identifier | None = None
+    source_generation_job_revision_id: Identifier | None = None
+    source_response_sha256: Identifier | None = None
+    static_gate_version: Identifier | None = None
     model_calls: tuple[ModelCallRecord, ...] = Field(default=(), max_length=GENERATION_MODEL_MAX_CALLS)
     attempt: int = Field(default=0, ge=0)
     checkpoint_step: Literal["prepare", "generate", "validate"] | None = None
@@ -1166,18 +1176,41 @@ class ProductGenerationJob(FrozenModel):
         if self.materialization_kind == "repair":
             if self.provider != "deterministic_repair" or self.provider_version != REPAIR_JOB_VERSION or not self.parent_generation_job_id or not self.repair_job_id:
                 raise ValueError("repair generation requires repair provider and lineage")
+            if self.source_generation_job_id or self.source_generation_job_revision_id or self.source_response_sha256 or self.static_gate_version:
+                raise ValueError("repair generation cannot carry saved-model source provenance")
         elif self.materialization_kind == "model":
             if self.provider != GENERATION_MODEL_PROVIDER or self.provider_version != GENERATION_MODEL_VERSION or self.parent_generation_job_id or self.repair_job_id:
                 raise ValueError("model generation requires the model provider and no repair lineage")
+            if self.source_generation_job_id or self.source_generation_job_revision_id or self.source_response_sha256 or self.static_gate_version:
+                raise ValueError("provider model generation cannot carry saved-source lineage")
             if self.budget.max_cost_units > GENERATION_MODEL_MAX_CALLS or len(self.model_calls) > self.consumed_cost_units:
                 raise ValueError("model generation calls exceed the consumed budget")
             if [item.attempt for item in self.model_calls] != list(range(1, len(self.model_calls) + 1)):
                 raise ValueError("model call attempts must be sequential")
-            if self.status == "succeeded" and (not self.model_calls or self.model_calls[-1].outcome != "accepted"):
-                raise ValueError("succeeded model generation requires an accepted model call")
-        elif self.provider != "deterministic_template" or self.parent_generation_job_id or self.repair_job_id:
-            raise ValueError("template generation cannot carry repair lineage")
-        if self.materialization_kind != "model" and self.model_calls:
+            if self.status == "succeeded" and (
+                not self.model_calls
+                or not (
+                    self.model_calls[-1].outcome == "accepted"
+                    or (
+                        self.model_calls[-1].outcome == "rejected"
+                        and self.model_calls[-1].static_gate_revalidated
+                        and self.model_calls[-1].static_gate_version is not None
+                    )
+                )
+            ):
+                raise ValueError("succeeded model generation requires a provider-accepted call or an audited local gate revalidation")
+        elif self.materialization_kind == "saved_model":
+            if self.provider != GENERATION_SAVED_SOURCE_PROVIDER or self.provider_version != GENERATION_SAVED_SOURCE_VERSION:
+                raise ValueError("saved-model materialization requires its deterministic local provider")
+            if self.parent_generation_job_id or self.repair_job_id or self.model_calls:
+                raise ValueError("saved-model materialization uses explicit source provenance, not provider calls or repair lineage")
+            if not self.source_generation_job_id or not self.source_generation_job_revision_id or not self.source_response_sha256 or not self.static_gate_version:
+                raise ValueError("saved-model materialization requires a pinned source job, response hash, and gate version")
+            if self.consumed_cost_units > 0:
+                raise ValueError("saved-model materialization cannot charge model provider cost")
+        elif self.provider != "deterministic_template" or self.parent_generation_job_id or self.repair_job_id or self.source_generation_job_id or self.source_generation_job_revision_id or self.source_response_sha256 or self.static_gate_version:
+            raise ValueError("template generation cannot carry model or repair lineage")
+        if self.materialization_kind not in {"model", "saved_model"} and self.model_calls:
             raise ValueError("only model generation may record model calls")
         if self.status == "succeeded" and self.manifest is None:
             raise ValueError("succeeded generation job requires an artifact manifest")

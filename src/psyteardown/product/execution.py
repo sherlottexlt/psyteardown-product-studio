@@ -127,6 +127,12 @@ def _classify_browser_failure(output: bytes, default_code: str) -> str:
     if not default_code.startswith("browser_"):
         return default_code
     text = output.decode("utf-8", errors="replace").lower()
+    if (
+        "cannot read properties of undefined" in text
+        or "cannot read properties of null" in text
+        or "typeerror:" in text and "generated-contract.spec.ts" in text
+    ):
+        return "browser_test_harness_failed"
     if "axe" in text or "accessibility" in text or "violations" in text:
         return "browser_accessibility_failed"
     if "expect(" in text or "tobevisible" in text or "locator" in text or "assert" in text:
@@ -239,11 +245,18 @@ class SubprocessExecutionCommandRunner:
             raise ExecutionCommandError("command_unavailable", "The allowlisted execution command is unavailable.") from exc
         output = completed.stdout or b""
         if completed.returncode != 0:
-            raise ExecutionCommandError(
-                _classify_browser_failure(output, failure_code),
+            code = _classify_browser_failure(output, failure_code)
+            safe_summaries = {
+                "browser_test_harness_failed": "The contract-derived browser test harness crashed before verification completed.",
+                "browser_accessibility_failed": "The browser validation found accessibility violations.",
+                "browser_assertion_failed": "The generated product did not satisfy a contract-derived browser check.",
+                "browser_launch_failed": "The local browser could not be started for validation.",
+            }
+            summary = safe_summaries.get(
+                code,
                 f"The allowlisted command failed with exit code {completed.returncode}.",
-                output_bytes=len(output),
             )
+            raise ExecutionCommandError(code, summary, output_bytes=len(output))
         return CommandResult(
             exit_code=completed.returncode,
             output_bytes=len(output),

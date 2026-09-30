@@ -95,6 +95,9 @@ class C1TrialEnvelope(FrozenModel):
     execution_job_revision_id: Identifier
     web_generation_contract_revision_id: Identifier
     host: Identifier
+    # Explicit host acknowledgment that the delivered build can complete its core task.
+    # This is intentionally separate from B4/B6 software verification.
+    product_usability_confirmed: bool = False
     consent_policy_revision: Identifier = C1_CONSENT_POLICY_REVISION
     consent_statement: Identifier = C1_CONSENT_STATEMENT
     access_policy: tuple[Identifier, ...] = C1_ACCESS_POLICY
@@ -860,11 +863,16 @@ class ProductC1ObservationService:
     def start_envelope(self, *, project_id: str, measurement_plan_revision_id: str,
                        delivery_bundle_id: str, execution_job_revision_id: str,
                        web_generation_contract_revision_id: str, host: str,
+                       product_usability_confirmed: bool,
                        actor: str, reason: str) -> C1TrialEnvelope:
         if not self.trial_enabled:
             raise DomainStateError(C1_TRIAL_PAUSED_MESSAGE)
         if not is_named_human_actor(host) or not is_named_human_actor(actor):
             raise DomainStateError("C1 trial envelope requires a named human host")
+        if not product_usability_confirmed:
+            raise DomainStateError(
+                "C1 requires an explicit host confirmation that the delivered product can complete its core task; B4/B6 software verification is not enough"
+            )
         view = self.application.get_project_view(project_id)
         plan = view.outcome_measurement_plan
         if plan is None or plan.revision_id != measurement_plan_revision_id or plan.status != "confirmed":
@@ -883,6 +891,7 @@ class ProductC1ObservationService:
             delivery_bundle_id=bundle.bundle_id, delivery_bundle_revision_id=bundle.revision_id,
             execution_job_revision_id=execution_job_revision_id,
             web_generation_contract_revision_id=web_generation_contract_revision_id, host=host,
+            product_usability_confirmed=True,
         )
         self.repository.save_c1_batch((envelope,))
         return envelope

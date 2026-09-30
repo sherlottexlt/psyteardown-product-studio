@@ -24,6 +24,8 @@ from psyteardown.product.env import get_project_env
 SOURCE_MODEL_MAX_APP_BYTES = 64 * 1024
 SOURCE_MODEL_MAX_CSS_BYTES = 32 * 1024
 SOURCE_MODEL_MAX_OUTPUT_TOKENS = 8000
+SOURCE_MODEL_GATE_VERSION = "b7m-static-gate-v3"
+SOURCE_MODEL_WORKSPACE_VERSION = "b7m-workspace-v5"
 SOURCE_MODEL_SENT = (
     "confirmed Web generation contract: app title, screens, tasks, states, content slots, acceptance checks",
     "the previous attempt's static-gate rejection reasons (retry only)",
@@ -59,6 +61,14 @@ _FORBIDDEN_CSS = (
     (re.compile(r"expression\s*\(", re.IGNORECASE), "CSS expression() is not allowed"),
 )
 _FENCE = re.compile(r"```([A-Za-z]*)[^\n]*\n(.*?)```", re.DOTALL)
+_JS_STRING_CONSTANT = re.compile(
+    r"\b(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:"
+    r'"((?:\\.|[^"\\])*)"|'
+    r"'((?:\\.|[^'\\])*)'|"
+    r"`((?:\\.|[^`\\])*)`)"
+)
+_JS_TEMPLATE_REFERENCE = re.compile(r"\$\{([A-Za-z_$][A-Za-z0-9_$]*)\}")
+_JS_TEMPLATE_LITERAL = re.compile(r"`((?:\\.|[^`\\])*)`")
 
 
 @dataclass(frozen=True)
@@ -189,6 +199,10 @@ DOM protocol (a browser test derived from the contract checks it exactly):
 - Inside its screen section, one <button type="button" data-task-id="TASK_ID"> per task of that screen, labelled in plain words after the task goal.
   Clicking it must simulate the task locally and set the status to one of that screen's state kinds other than "ready" and "loading"
   (a short "loading" in between is allowed). At least one task must reach "success".
+- Implement the contract's core task, not a generic button demo. If required content slots describe options, standards, known facts, concerns, or a user leaning,
+  render at least two visible local options and editable controls for those categories; do not leave the user with only fallback paragraphs.
+  If the contract includes a decision brief save/export task, render a local JSON export and import control without network calls or browser storage.
+  A local fixture must contain useful example content, and the primary-flow tasks must visibly change or record something meaningful.
 - If primary_flow_task_ids is non-empty, it is the one end-to-end journey a human should run. Keep it visually obvious, show the current next action, and advance
   data-primary-flow-step from 0 to the completed step count after each matching task is completed. Do not present the journey as unrelated demo buttons.
 - Exactly one status element, always rendered outside the sections: <p role="status" aria-live="polite" data-state-kind="KIND">
@@ -197,7 +211,9 @@ DOM protocol (a browser test derived from the contract checks it exactly):
 - Whenever the status kind is not "ready", a visible <button type="button" data-recovery="true"> exists; clicking it returns the status to "ready".
 - For every content slot with required=true, render an element with data-slot-id="SLOT_ID" and non-empty end-user text on at least one screen
   (fallback_text is acceptable; the description explains the slot's purpose and is not UI copy).
-- Use the exact ids from the contract. Keep it accessible (WCAG 2 AA contrast, labelled controls, no nested interactive elements).
+- Use the exact ids from the contract. For long IDs, you may declare a literal prefix constant and compose the remaining exact suffix with a simple template literal (for example, `const P = "..."; const SCREEN = `${P}-screen`;`), then bind that constant to the required data attribute. Do not invent or alter IDs.
+- The end-to-end primary flow may include tasks on different screens. Its progress tracker must persist in React state and remain available on the primary screen; only advance a step after that matching task actually completes.
+- Keep it accessible (WCAG 2 AA contrast, labelled controls, no nested interactive elements).
 - Keep copy calm and concrete; do not claim outcomes the app cannot know. The UI language should match the contract text.
 """
 
@@ -241,6 +257,59 @@ def parse_source_reply(text: str, *, truncated: bool = False) -> tuple[dict[str,
     return {"src/App.tsx": tsx[0].strip() + "\n", "src/styles.css": css[0].strip() + "\n"}, []
 
 
+def _declared_string_values(source: str) -> set[str]:
+    """Resolve literal and simple template-derived JS constants without evaluation.
+
+    Models commonly factor a long job prefix into one constant and compose
+    screen/task/slot IDs with template literals, e.g. ``const ID = `${P}-screen```.
+    Those values are statically knowable and must not be rejected just because
+    the final ID is not repeated as one source substring. This intentionally
+    does not execute JavaScript or resolve arbitrary expressions.
+    """
+    declarations: dict[str, tuple[str, str]] = {}
+    for match in _JS_STRING_CONSTANT.finditer(source):
+        name = match.group(1)
+        if match.group(2) is not None:
+            declarations[name] = ("quoted", match.group(2))
+        elif match.group(3) is not None:
+            declarations[name] = ("quoted", match.group(3))
+        else:
+            declarations[name] = ("template", match.group(4) or "")
+
+    values: dict[str, str] = {}
+    derived: set[str] = set()
+    inline_templates = _JS_TEMPLATE_LITERAL.findall(source)
+    for _ in range(len(declarations) + len(inline_templates) + 1):
+        changed = False
+        for name, (kind, raw) in declarations.items():
+            if kind == "quoted":
+                candidate = raw
+            else:
+                refs = _JS_TEMPLATE_REFERENCE.findall(raw)
+                if any(ref not in values for ref in refs):
+                    continue
+                candidate = _JS_TEMPLATE_REFERENCE.sub(
+                    lambda item: values[item.group(1)], raw
+                )
+            if values.get(name) != candidate:
+                values[name] = candidate
+                derived.add(candidate)
+                changed = True
+        for raw in inline_templates:
+            refs = _JS_TEMPLATE_REFERENCE.findall(raw)
+            if any(ref not in values for ref in refs):
+                continue
+            candidate = _JS_TEMPLATE_REFERENCE.sub(
+                lambda item: values[item.group(1)], raw
+            )
+            if candidate not in derived:
+                derived.add(candidate)
+                changed = True
+        if not changed:
+            break
+    return derived
+
+
 def check_model_source(files: dict[str, str], contract: WebProductGenerationContract) -> list[str]:
     """Static gate; returns human-readable reasons, empty when accepted."""
     app = files["src/App.tsx"]
@@ -271,15 +340,16 @@ def check_model_source(files: dict[str, str], contract: WebProductGenerationCont
     for marker, pattern in markers:
         if not re.search(pattern, app):
             reasons.append(f"DOM protocol marker {marker} is missing")
+    declared_string_values = _declared_string_values(app)
     required = [
         *(("screen", item.screen_id) for item in contract.screens),
         *(("task", item.task_id) for item in contract.tasks),
         *(("content slot", item.slot_id) for item in contract.content_slots if item.required),
     ]
     for kind, identifier in required:
-        if identifier not in app:
+        if identifier not in app and identifier not in declared_string_values:
             reasons.append(f"{kind} id {identifier} from the contract is missing")
-    return reasons[:20]
+    return reasons[:50]
 
 
 def contract_browser_test(contract: WebProductGenerationContract) -> str:
@@ -293,8 +363,62 @@ def contract_browser_test(contract: WebProductGenerationContract) -> str:
     data = {
         "appTitle": contract.app_title,
         "screens": screens,
+        # The generated browser test below exercises the primary journey too;
+        # include the task lookup data it dereferences rather than only screen
+        # task IDs. Omitting either field causes the harness itself to throw
+        # after the per-screen checks, which B4 correctly reports as failure.
+        "tasks": [
+            {"task_id": item.task_id, "screen_id": item.screen_id}
+            for item in contract.tasks
+        ],
+        "primary_flow_task_ids": list(contract.primary_flow_task_ids),
         "requiredSlots": [item.slot_id for item in contract.content_slots if item.required],
     }
+    primary_flow_test = (
+        "  if (contract.primary_flow_task_ids.length) {\n"
+        "    const flow = contract.primary_flow_task_ids;\n"
+        "    const firstTask = contract.tasks.find((item) => item.task_id === flow[0]);\n"
+        "    if (!firstTask) throw new Error('primary flow references an unknown task');\n"
+        "    await page.locator(`[data-screen-link=\"${firstTask.screen_id}\"]`).click();\n"
+        "    const tracker = page.locator('[data-primary-flow-step]');\n"
+        "    await expect(tracker).toHaveAttribute('data-primary-flow-step', '0');\n"
+        "    for (let index = 0; index < flow.length; index += 1) {\n"
+        "      const task = contract.tasks.find((item) => item.task_id === flow[index]);\n"
+        "      if (!task) throw new Error('primary flow task is missing');\n"
+        "      const taskScreen = contract.screens.find((item) => item.id === task.screen_id);\n"
+        "      if (!taskScreen) throw new Error('primary flow task screen is missing');\n"
+        "      await page.locator(`[data-screen-link=\"${task.screen_id}\"]`).click();\n"
+        "      const taskButton = page.locator(`[data-screen-id=\"${task.screen_id}\"] [data-task-id=\"${task.task_id}\"]`);\n"
+        "      await taskButton.click();\n"
+        "      if (task.task_id.endsWith('-save-brief')) await expect(page.locator('[data-export-brief=\"true\"]')).toBeVisible();\n"
+        "      // Wait for the task's local transition before navigation can cancel its timer.\n"
+        "      await expect(status).toHaveAttribute('data-state-kind', new RegExp(`^(${taskScreen.outcomes.join('|')})$`));\n"
+        "      // The progress tracker may live only on the primary screen. Return there before reading it.\n"
+        "      await page.locator(`[data-screen-link=\"${firstTask.screen_id}\"]`).click();\n"
+        "      await expect(tracker).toHaveAttribute('data-primary-flow-step', String(index + 1));\n"
+        "      await expect(status).not.toHaveText(/^\\s*$/);\n"
+        "    }\n"
+        "  }\n"
+    )
+    per_screen_test = (
+        "  for (const screen of contract.screens) {\n"
+        "    for (const task of screen.tasks) {\n"
+        "      await page.locator(`[data-screen-link=\"${screen.id}\"]`).click();\n"
+        "      const section = page.locator(`[data-screen-id=\"${screen.id}\"]`);\n"
+        "      await expect(section).toBeVisible();\n"
+        "      for (const slot of await page.locator('[data-slot-id]').all()) {\n"
+        "        if ((await slot.innerText()).trim()) seenSlots.add((await slot.getAttribute('data-slot-id')) ?? '');\n"
+        "      }\n"
+        "      await section.locator(`[data-task-id=\"${task}\"]`).click();\n"
+        "      await expect(status).toHaveAttribute('data-state-kind', new RegExp(`^(${screen.outcomes.join('|')})$`));\n"
+        "      await expect(status).not.toHaveText(/^\\s*$/);\n"
+        "      reached.add((await status.getAttribute('data-state-kind')) ?? '');\n"
+        "      await page.locator('[data-recovery=\"true\"]').first().click();\n"
+        "      await expect(status).toHaveAttribute('data-state-kind', 'ready');\n"
+        "    }\n"
+        "    expect(await seriousViolations(page)).toEqual([]);\n"
+        "  }\n"
+    )
     return (
         "import AxeBuilder from '@axe-core/playwright';\n"
         "import {expect, test, type Page} from '@playwright/test';\n\n"
@@ -315,44 +439,15 @@ def contract_browser_test(contract: WebProductGenerationContract) -> str:
         "  expect(await seriousViolations(page)).toEqual([]);\n"
         "  const seenSlots = new Set<string>();\n"
         "  const reached = new Set<string>();\n"
-        "  for (const screen of contract.screens) {\n"
-        "    for (const task of screen.tasks) {\n"
-        "      await page.locator(`[data-screen-link=\"${screen.id}\"]`).click();\n"
-        "      const section = page.locator(`[data-screen-id=\"${screen.id}\"]`);\n"
-        "      await expect(section).toBeVisible();\n"
-        "      for (const slot of await page.locator('[data-slot-id]').all()) {\n"
-        "        if ((await slot.innerText()).trim()) seenSlots.add((await slot.getAttribute('data-slot-id')) ?? '');\n"
-        "      }\n"
-        "      await section.locator(`[data-task-id=\"${task}\"]`).click();\n"
-        "      await expect(status).toHaveAttribute('data-state-kind', new RegExp(`^(${screen.outcomes.join('|')})$`));\n"
-        "      await expect(status).not.toHaveText(/^\\s*$/);\n"
-        "      reached.add((await status.getAttribute('data-state-kind')) ?? '');\n"
-        "      await page.locator('[data-recovery=\"true\"]').first().click();\n"
-        "      await expect(status).toHaveAttribute('data-state-kind', 'ready');\n"
-        "    }\n"
-        "    expect(await seriousViolations(page)).toEqual([]);\n"
-        "  }\n"
-        "  if (contract.primary_flow_task_ids.length) {\n"
-        "    const flow = contract.primary_flow_task_ids;\n"
-        "    const firstTask = contract.tasks.find((item) => item.task_id === flow[0]);\n"
-        "    if (!firstTask) throw new Error('primary flow references an unknown task');\n"
-        "    await page.locator(`[data-screen-link=\"${firstTask.screen_id}\"]`).click();\n"
-        "    await expect(page.locator('[data-primary-flow-step]')).toHaveAttribute('data-primary-flow-step', '0');\n"
-        "    for (let index = 0; index < flow.length; index += 1) {\n"
-        "      const task = contract.tasks.find((item) => item.task_id === flow[index]);\n"
-        "      if (!task) throw new Error('primary flow task is missing');\n"
-        "      await page.locator(`[data-screen-link=\"${task.screen_id}\"]`).click();\n"
-        "      await page.locator(`[data-screen-id=\"${task.screen_id}\"] [data-task-id=\"${task.task_id}\"]`).click();\n"
-        "      await expect(page.locator('[data-primary-flow-step]')).toHaveAttribute('data-primary-flow-step', String(index + 1));\n"
-        "      await expect(status).not.toHaveText(/^\\s*$/);\n"
-        "    }\n"
-        "  }\n"
+        f"{primary_flow_test}"
+        f"{per_screen_test}"
         "  expect([...contract.requiredSlots].filter((slot) => !seenSlots.has(slot))).toEqual([]);\n"
         "  expect(reached.has('success')).toBe(true);\n"
         "  expect(errors).toEqual([]);\n"
         "  await page.screenshot({path: 'test-results/generated-product.png', fullPage: true});\n"
         "});\n"
     )
+
 
 
 def timed_generate(model: ProductSourceModel, *, system: str, prompt: str) -> tuple[SourceModelReply, float]:

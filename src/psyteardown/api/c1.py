@@ -74,6 +74,7 @@ async def start_c1_envelope(project_id: str, request: StartC1EnvelopeRequest, se
         execution_job_revision_id=request.execution_job_revision_id,
         web_generation_contract_revision_id=request.web_generation_contract_revision_id,
         host=request.host,
+        product_usability_confirmed=request.product_usability_confirmed,
         actor=request.actor,
         reason=request.reason,
     ))

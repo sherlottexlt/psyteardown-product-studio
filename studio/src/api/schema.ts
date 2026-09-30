@@ -556,6 +556,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/generation-jobs/{job_id}/revalidations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revalidate Saved Model Draft
+         * @description Re-run the local static gate on a saved rejected draft without calling a provider.
+         */
+        post: operations["revalidate_saved_model_draft_api_v1_projects__project_id__generation_jobs__job_id__revalidations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/generation-jobs/{job_id}/runs": {
         parameters: {
             query?: never;
@@ -567,6 +587,26 @@ export interface paths {
         put?: never;
         /** Run Generation Job */
         post: operations["run_generation_job_api_v1_projects__project_id__generation_jobs__job_id__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/generation-jobs/{job_id}/saved-source-materializations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Saved Source Materialization
+         * @description Create an independent B3 child job from a saved, locally revalidated source.
+         */
+        post: operations["create_saved_source_materialization_api_v1_projects__project_id__generation_jobs__job_id__saved_source_materializations_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1336,6 +1376,8 @@ export interface components {
             /** Measurement Plan Revision Id */
             measurement_plan_revision_id: string;
             meta: components["schemas"]["RevisionMetaResponse"];
+            /** Product Usability Confirmed */
+            product_usability_confirmed: boolean;
             /** Project Id */
             project_id: string;
             /** Retention Expires At */
@@ -2155,6 +2197,13 @@ export interface components {
              *     ]
              */
             sent_object_types: "web_generation_contract"[];
+            /**
+             * Static Gate Revalidated
+             * @default false
+             */
+            static_gate_revalidated: boolean;
+            /** Static Gate Version */
+            static_gate_version?: string | null;
             /** Transcript Path */
             transcript_path: string;
         };
@@ -2168,14 +2217,24 @@ export interface components {
             gate: {
                 [key: string]: unknown;
             } | null;
+            /** Gate Revalidations */
+            gate_revalidations?: {
+                [key: string]: unknown;
+            }[];
             /** Model */
             model: string;
             /** Prompt */
             prompt: string;
             /** Provider */
             provider: string;
+            /** Provider Gate */
+            provider_gate?: {
+                [key: string]: unknown;
+            } | null;
             /** Response */
             response: string | null;
+            /** Static Gate Version */
+            static_gate_version?: string | null;
             /** System */
             system: string;
         };
@@ -2652,7 +2711,7 @@ export interface components {
              * Materialization Kind
              * @enum {string}
              */
-            materialization_kind: "template" | "repair" | "model";
+            materialization_kind: "template" | "repair" | "model" | "saved_model";
             meta: components["schemas"]["RevisionMetaResponse"];
             /** Model Calls */
             model_calls: components["schemas"]["ModelCallRecord"][];
@@ -2664,7 +2723,7 @@ export interface components {
              * Provider
              * @enum {string}
              */
-            provider: "deterministic_template" | "deterministic_repair" | "model_source";
+            provider: "deterministic_template" | "deterministic_repair" | "model_source" | "saved_model_revalidation";
             /** Provider Version */
             provider_version: string;
             /** Repair Job Id */
@@ -2672,6 +2731,14 @@ export interface components {
             /** Revision Id */
             revision_id: string;
             sandbox: components["schemas"]["GenerationSandboxPolicy"];
+            /** Source Generation Job Id */
+            source_generation_job_id?: string | null;
+            /** Source Generation Job Revision Id */
+            source_generation_job_revision_id?: string | null;
+            /** Source Response Sha256 */
+            source_response_sha256?: string | null;
+            /** Static Gate Version */
+            static_gate_version?: string | null;
             /**
              * Status
              * @enum {string}
@@ -3281,6 +3348,11 @@ export interface components {
             host: string;
             /** Measurement Plan Revision Id */
             measurement_plan_revision_id: string;
+            /**
+             * Product Usability Confirmed
+             * @default false
+             */
+            product_usability_confirmed: boolean;
             /** Reason */
             reason: string;
             /** Web Generation Contract Revision Id */
@@ -5657,6 +5729,60 @@ export interface operations {
             };
         };
     };
+    revalidate_saved_model_draft_api_v1_projects__project_id__generation_jobs__job_id__revalidations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerationJobActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductGenerationJobResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Revision or domain-state conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Request or domain validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     run_generation_job_api_v1_projects__project_id__generation_jobs__job_id__runs_post: {
         parameters: {
             query?: never;
@@ -5675,6 +5801,60 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductGenerationJobResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Revision or domain-state conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Request or domain validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    create_saved_source_materialization_api_v1_projects__project_id__generation_jobs__job_id__saved_source_materializations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerationJobActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

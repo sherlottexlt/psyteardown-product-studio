@@ -91,6 +91,7 @@ export function C1Panel({
   const [reviewLevel, setReviewLevel] = useState<C1EvidenceLevel>("observed");
   const [reviewRationale, setReviewRationale] = useState("Reviewed the structured task record");
   const [consentChecked, setConsentChecked] = useState(false);
+  const [productUsabilityConfirmed, setProductUsabilityConfirmed] = useState(false);
   const [endReason, setEndReason] = useState("");
 
   const policy = policyQuery.data;
@@ -128,7 +129,7 @@ export function C1Panel({
     }
   }
 
-  const canStart = plan.status === "confirmed" && deliveryBundle?.contract_is_current && executionJob?.status === "succeeded" && Boolean(contract) && policy?.trial_state === "available";
+  const canStart = plan.status === "confirmed" && deliveryBundle?.contract_is_current && executionJob?.status === "succeeded" && Boolean(contract) && policy?.trial_state === "available" && productUsabilityConfirmed;
   const completionCauseRequired = status !== "observed" && !completionCause.trim();
   const envelopeActive = envelope?.status === "active";
   return (
@@ -142,8 +143,9 @@ export function C1Panel({
       {policy ? <div className="c1-policy"><strong>{policy.consent_policy_revision} · {policy.trial_state === "paused" ? "当前暂缓" : "可启动"}</strong><span>{policy.trial_status_message}</span><span>{policy.statement}</span><small>访问：{policy.access_policy.join("、")} · 保留：{policy.retention_policy}</small></div> : null}
       {!envelope ? (
         <div className="c1-actions">
-          <button className="button button--primary" disabled={busy || !canStart} onClick={() => deliveryBundle && executionJob && void run(() => startC1Envelope({ projectId, measurementPlanRevisionId: plan.revision_id, deliveryBundleId: deliveryBundle.bundle_id, executionJobRevisionId: deliveryBundle.execution_job_revision_id, webGenerationContractRevisionId: deliveryBundle.web_generation_contract_revision_id }))}>开始本地 C1 试用</button>
-          {!canStart ? <span className="unknown-copy">{policy?.trial_state === "paused" ? policy.trial_status_message : "需要确认的 C2 计划、当前 Web 契约和成功的 B6 交付包。"}</span> : null}
+          <button className="button button--primary" disabled={busy || !canStart} onClick={() => deliveryBundle && executionJob && void run(() => startC1Envelope({ projectId, measurementPlanRevisionId: plan.revision_id, deliveryBundleId: deliveryBundle.bundle_id, executionJobRevisionId: deliveryBundle.execution_job_revision_id, webGenerationContractRevisionId: deliveryBundle.web_generation_contract_revision_id, productUsabilityConfirmed }))}>开始本地 C1 试用</button>
+          <label className="checkbox-label c1-readiness-check"><input type="checkbox" checked={productUsabilityConfirmed} onChange={(event) => setProductUsabilityConfirmed(event.target.checked)} />我已亲自走完交付包的核心任务；它有真实的输入/内容和完成结果，不只是构建通过或按钮演示。</label>
+          {!canStart ? <span className="unknown-copy">{policy?.trial_state === "paused" ? policy.trial_status_message : !productUsabilityConfirmed ? "先完成上面的产品可用性确认；B4/B6 通过不等于产品已经适合真实任务。" : "需要确认的 C2 计划、当前 Web 契约和成功的 B6 交付包。"}</span> : null}
         </div>
       ) : !envelopeActive ? (
         <div className="c1-stack">

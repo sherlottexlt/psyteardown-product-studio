@@ -69,7 +69,7 @@ class TooManyPatchPlanner:
 
 def test_b5_repair_creates_child_lineage_and_reverifies(tmp_path):
     runner = FailBrowserOnce()
-    execution_service, project, generated = build_execution_service(tmp_path, runner=runner)
+    execution_service, project, generated = build_execution_service(tmp_path, runner=runner, broken_template=True)
     failed = execution_service.run_job(
         project.project_id,
         execution_service.create_job(
@@ -143,6 +143,13 @@ def test_b5_unknown_failure_is_retained_without_guessing(tmp_path):
     assert completed.status in {"failed", "budget_exhausted"}
     assert completed.attempts[0].status in {"failed", "unsupported"}
     assert completed.latest_generation_job_id is None
+    assert completed.status == "failed"
+    try:
+        repair_service.retry_job(project.project_id, queued.job_id, actor="user")
+    except Exception as exc:
+        assert "no allowlisted patch" in str(exc)
+    else:
+        raise AssertionError("an unsupported deterministic repair must not be retried")
     duplicate = repair_service.create_job(
         project_id=project.project_id,
         execution_job_id=failed.job_id,

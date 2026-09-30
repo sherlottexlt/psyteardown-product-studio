@@ -56,8 +56,8 @@ class ArtifactRunner:
         )
 
 
-def _executed(tmp_path, runner=None):
-    execution_service, project, generated = build_execution_service(tmp_path, runner=runner or ArtifactRunner())
+def _executed(tmp_path, runner=None, *, broken_template=False):
+    execution_service, project, generated = build_execution_service(tmp_path, runner=runner or ArtifactRunner(), broken_template=broken_template)
     queued = execution_service.create_job(
         project_id=project.project_id, generation_job_id=generated.job_id, actor="user", reason="validate"
     )
@@ -108,6 +108,8 @@ def test_b6_verified_execution_exports_content_addressed_bundle(tmp_path):
         assert not any("node_modules" in name or name.endswith("package-lock.json") for name in names)
         notes = bundle_zip.read("DELIVERY.md").decode("utf-8")
         assert "## Not verified" in notes
+        assert "python -m http.server 4174 --bind 127.0.0.1" in notes
+        assert "file://" in notes
         assert executed.revision_id in notes
 
     duplicate = service.create_bundle(
@@ -179,7 +181,7 @@ def test_b6_rejects_symlinked_build_artifact(tmp_path):
 
 
 def test_b6_repaired_execution_bundle_records_repair_lineage(tmp_path):
-    execution_service, project, generated, failed = _executed(tmp_path, ArtifactRunner(fail_browser_once=True))
+    execution_service, project, generated, failed = _executed(tmp_path, ArtifactRunner(fail_browser_once=True), broken_template=True)
     assert failed.status == "failed"
     repair_service = ProductRepairJobService(
         execution_service.application,

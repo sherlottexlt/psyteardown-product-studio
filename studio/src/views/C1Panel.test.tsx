@@ -153,7 +153,7 @@ describe("C1Panel", () => {
 
     renderPanel({ deliveryBundle: null, executionJob: null });
 
-    expect(await screen.findByText("需要确认的 C2 计划、当前 Web 契约和成功的 B6 交付包。")).toBeInTheDocument();
+    expect(await screen.findByText("先完成上面的产品可用性确认；B4/B6 通过不等于产品已经适合真实任务。")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始本地 C1 试用" })).toBeDisabled();
     expect(await screen.findByText(policy.statement)).toBeInTheDocument();
   });

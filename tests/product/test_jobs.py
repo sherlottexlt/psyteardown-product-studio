@@ -453,6 +453,55 @@ def test_web_generation_contract_job_uses_only_the_b2_template_and_local_boundar
     assert all(item.source_kind != "research" for item in generation.content_slots)
 
 
+def test_web_generation_reproposal_reuses_singleton_and_advances_revision():
+    application, _, service = build_services()
+    project, _, _ = _confirmed_outcome_contract(application, service)
+    thesis_job = service.create_job(
+        project_id=project.project_id,
+        kind="product_theses",
+        actor="user-li",
+        reason="search paths",
+    )
+    service.run_job(project.project_id, thesis_job.job_id, actor="worker")
+    thesis = application.get_project_view(project.project_id).product_theses[0]
+    application.transition_product_thesis(
+        TransitionProductThesis(
+            project_id=project.project_id,
+            thesis_id=thesis.thesis_id,
+            expected_revision=thesis.meta.revision,
+            to_status="selected",
+            actor="user-li",
+            actor_type="human",
+            reason="select comparison board",
+        )
+    )
+    first = service.create_job(
+        project_id=project.project_id,
+        kind="web_generation_contract",
+        actor="user-li",
+        reason="first proposal",
+    )
+    assert service.run_job(project.project_id, first.job_id, actor="worker").status == "succeeded"
+    current = application.get_project_view(project.project_id).web_generation_contract
+    assert current is not None and current.meta.revision == 1
+
+    second = service.create_job(
+        project_id=project.project_id,
+        kind="web_generation_contract",
+        actor="user-li",
+        reason="explicitly refresh proposal",
+    )
+    assert second.job_id != first.job_id
+    assert second.result_object_id == current.web_generation_contract_id
+    assert second.result_expected_revision == current.meta.revision
+    assert service.run_job(project.project_id, second.job_id, actor="worker").status == "succeeded"
+    refreshed = application.get_project_view(project.project_id).web_generation_contract
+    assert refreshed is not None
+    assert refreshed.web_generation_contract_id == current.web_generation_contract_id
+    assert refreshed.meta.revision == 2
+    assert refreshed.status == "proposed"
+
+
 def test_failed_sqlite_job_recovers_after_restart_and_can_be_retried(tmp_path):
     database = tmp_path / "product.sqlite3"
     ids = SequenceIds()

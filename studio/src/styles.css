@@ -554,6 +554,22 @@ select { cursor: pointer; }
 .primary-flow-summary strong { color: var(--text); font-size: 11px; line-height: 1.45; }
 .primary-flow-summary small { margin-top: 5px; color: var(--dim); font-size: 9px; line-height: 1.45; }
 @media (max-width: 760px) { .primary-flow-summary ol { grid-template-columns: 1fr; } }
+.contract-screens { margin: 22px 0; padding: 18px; border: 1px solid var(--line); background: rgba(16, 22, 19, .72); }
+.contract-screens__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.contract-screens__heading h3 { margin: 0; font-size: 15px; }
+.contract-screens__heading > span { color: var(--dim); font-family: var(--mono); font-size: 9px; }
+.contract-screens__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.contract-screen-card { padding: 14px; border: 1px solid var(--line); background: var(--panel); }
+.contract-screen-card header { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
+.contract-screen-card header > span { color: var(--acid); font-family: var(--mono); font-size: 10px; }
+.contract-screen-card h4 { margin: 0; font-size: 14px; }
+.contract-screen-card > p { min-height: 44px; margin: 0 0 12px; color: #aeb7b1; font-size: 10px; line-height: 1.55; }
+.contract-screen-card ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.contract-screen-card li { padding-top: 8px; border-top: 1px solid var(--line-soft); }
+.contract-screen-card li strong, .contract-screen-card li small { display: block; }
+.contract-screen-card li strong { color: var(--text); font-size: 10px; line-height: 1.45; }
+.contract-screen-card li small { margin-top: 3px; color: var(--dim); font-size: 9px; line-height: 1.4; }
+@media (max-width: 900px) { .contract-screens__grid { grid-template-columns: 1fr; } }
 
 
 .field-hint { display: block; margin-top: -12px; color: var(--dim); font-family: var(--mono); font-size: 9px; line-height: 1.5; }
@@ -563,6 +579,10 @@ select { cursor: pointer; }
 .recent-projects ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .recent-projects li button { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 12px; border: 1px solid var(--line-soft); background: rgba(255,255,255,.02); color: var(--ink); text-align: left; cursor: pointer; }
 .recent-projects li button:hover { border-color: var(--acid); background: rgba(198,243,107,.06); }
+.recent-project-row { display: flex; align-items: center; gap: 8px; }
+.recent-project-row > button:first-child { flex: 1; }
+.recent-project-action { flex: 0 0 auto; padding: 8px 10px; white-space: nowrap; }
+.recent-projects--archived { opacity: .82; }
 .recent-projects li strong { font-size: 12px; }
 .recent-projects li small { color: var(--dim); font-family: var(--mono); font-size: 9px; }
 .recovery-banner { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin: 18px 0 4px; padding: 12px 14px; border: 1px solid rgba(198,243,107,.35); background: rgba(198,243,107,.06); }
